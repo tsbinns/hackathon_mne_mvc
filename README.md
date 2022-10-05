@@ -1,4 +1,4 @@
-# multivar_conn
+# hackathon_mne_mvc
 Multivariate connectivity methods implemented in Python and based on functions and objects available in MNE.
 
 The methods include:
@@ -11,7 +11,7 @@ The methods include:
 2. The [MNE](https://mne.tools/stable/index.html) and [MNE-connectivity](https://mne.tools/mne-connectivity/stable/index.html) packages.
 
 ## Use
-Use the _get__ scripts to generate the different multivariate results in Python or MATLAB, and then use the _compare_results__ scripts to compare the outputs of the Python and MATLAB implementations.
+Use the _example_pipeline.py_ script to generate the different multivariate results based on some example data (_Data/epochs-epo.fif_) using the specified settings (_Settings/pipeline_settings.json_).
 
 ## References
 [1] Ewald _et al._ (2012). _NeuroImage_. DOI: [10.1016/j.neuroimage.2011.11.084](https://doi.org/10.1016/j.neuroimage.2011.11.084).
