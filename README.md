@@ -1,4 +1,4 @@
-# multivar_conn
+# hackathon_mne_mvc
 Multivariate connectivity methods implemented in Python and based on functions and objects available in MNE.
 
 The methods include:
