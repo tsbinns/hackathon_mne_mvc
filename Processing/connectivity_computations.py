@@ -91,7 +91,6 @@ def multivariate_interaction_measure(
     -----
     -   References: [1] Ewald et al., 2012, Neuroimage. DOI:
         10.1016/j.neuroimage.2011.11.084.
-    -   Based on the 'compute_mim' MATLAB function.
     """
     if len(csd.shape) != 3:
         raise ValueError(
@@ -146,8 +145,7 @@ def max_imaginary_coherence(
     targets: list[list[Union[int, float]]],
     n_seed_components: Union[list[Union[int, None]], None] = None,
     n_target_components: Union[list[Union[int, None]], None] = None,
-    return_topographies: bool = True,
-) -> Union[NDArray, tuple[NDArray]]:
+) -> NDArray:
     """Computes the maximised imaginary coherence between two groups of signals.
 
     PARAMETERS
@@ -186,22 +184,11 @@ def max_imaginary_coherence(
     -   If some values in the list are 'None', no dimensionality reduction is
         performed on the target data for the corresponding connectivity node.
 
-    return_topographies : bool; default True
-    -   Whether or not to return spatial topographies of connectivity for the
-        signals.
-
     RETURNS
     -------
     mic : numpy ndarray
     -   Array containing connectivity values for each node with dimensions
         [nodes x frequencies].
-
-    topographies : tuple(numpy object array, numpy object array)
-    -   Spatial topographies of connectivity for seeds and targets,
-        respectively. The entries for seeds and targets have dimensions [nodes x
-        signals x frequencies], where signals correspond to the number of seed
-        and target signals in each node, respectively.
-    -   Returned only if 'return_topographies' is 'True'.
 
     RAISES
     ------
@@ -213,14 +200,7 @@ def max_imaginary_coherence(
     NOTES
     -----
     -   References: [1] Ewald et al. (2012), NeuroImage. DOI:
-        10.1016/j.neuroimage.2011.11.084; [2] Nikulin et al. (2011), NeuroImage,
-        DOI: 10.1016/j.neuroimage.2011.01.057.
-    -   Spatial topographies are computed using the weight vectors alpha and
-        beta (see [1]) by multiplying the real part of 'C' by the weight
-        vectors, as in Eq. 20 of [2]. If dimensionality reduction is performed,
-        weight vectors are recovered in the original sensor space using Eqs. 46
-        & 47 of [1].
-    -   Based on the 'compute_mic' MATLAB function.
+        10.1016/j.neuroimage.2011.11.084.
     """
     if len(csd.shape) != 3:
         raise ValueError(
@@ -246,18 +226,14 @@ def max_imaginary_coherence(
 
     n_freqs = csd.shape[2]
     mic = np.zeros((n_nodes, n_freqs))
-    topographies_a = []
-    topographies_b = []
     node_i = 0
     for seed_idcs, target_idcs in zip(seeds, targets):
-        topographies_a.append([])
-        topographies_b.append([])
         n_seeds = len(seed_idcs)
         node_idcs = [*seed_idcs, *target_idcs]
         node_csd = csd[np.ix_(node_idcs, node_idcs, np.arange(n_freqs))]
         for freq_i in range(n_freqs):
             # Eqs. 32 & 33
-            C_bar, U_bar_aa, U_bar_bb = cross_spectra_svd(
+            C_bar, U_bar_aa, _ = cross_spectra_svd(
                 csd=node_csd[:, :, freq_i],
                 n_seeds=n_seeds,
                 n_seed_components=n_seed_components[node_i],
@@ -279,37 +255,9 @@ def max_imaginary_coherence(
                 / np.linalg.norm(alpha)
                 * np.linalg.norm(beta)
             )
-
-            # Eqs. 46 & 47
-            if return_topographies:
-                topographies_a[node_i].append(
-                    np.matmul(
-                        np.real(node_csd[:n_seeds, :n_seeds, freq_i]),
-                        U_bar_aa.dot(alpha),
-                    ),
-                )  # C_aa * U_bar_aa * alpha
-                topographies_b[node_i].append(
-                    np.matmul(
-                        np.real(node_csd[n_seeds:, n_seeds:, freq_i]),
-                        U_bar_bb.dot(beta),
-                    ),
-                )  # C_bb * U_bar_bb * beta
-        if return_topographies:
-            topographies_a[node_i] = np.transpose(
-                topographies_a[node_i], (1, 0)
-            )  # [signals x frequencies]
-            topographies_b[node_i] = np.transpose(
-                topographies_b[node_i], (1, 0)
-            )  # [signals x frequencies]
-
         node_i += 1
 
-    if return_topographies:
-        topographies_a = np.asarray(topographies_a, dtype=object)
-        topographies_b = np.asarray(topographies_b, dtype=object)
-        return mic, (topographies_a, topographies_b)
-    else:
-        return mic
+    return mic
 
 
 def granger_causality(
@@ -443,10 +391,6 @@ def autocov_to_gc(
     ------
     NotImplementedError
     -   Raised if "method" is not supported.
-
-    NOTES
-    -----
-    -   Based on the 'data2sctrgcmim' MATLAB function.
     """
     supported_methods = ["gc", "net_gc", "trgc", "net_trgc"]
     if method not in supported_methods:

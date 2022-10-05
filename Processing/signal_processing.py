@@ -121,11 +121,6 @@ def csd_to_autocov(
         identical.
     -   Raised if the lengths of the seed and target indices do not match.
     -   Raised if "n_lags" is greater than (n_freqs - 1) * 2.
-
-    NOTES
-    -----
-    -   Translated into Python from the MATLAB MVGC toolbox v1.0 function
-        'cpsd_to_autocov' by Thomas Samuel Binns (@tsbinns).
     """
     if len(csd.shape) != 3:
         raise ValueError(
@@ -259,7 +254,6 @@ def autocov_to_full_var(G: NDArray) -> tuple[NDArray, NDArray]:
         values are neither 'NaN' nor 'Inf'.
     -   If an error is raised over the non-positive-definite nature of the
         residuals' covariance matrix, try using only data that has full rank.
-    -   Based on the 'autocov_to_var3' MATLAB function.
     """
     AF, V = whittle_lwr_recursion(G=G, enforce_coeffs_good=True)
 
@@ -315,7 +309,6 @@ def whittle_lwr_recursion(
     -----
     -   For Whittle's recursion algorithm, see: Whittle P., 1963, Biometrika,
         DOI: 10.1093/biomet/50.1-2.129.
-    -   Based on the 'autocov_to_var' MATLAB function.
     """
     G_shape = G.shape
     if len(G_shape) != 3:
@@ -422,7 +415,6 @@ def full_var_to_iss(AF: NDArray, V: NDArray):
         10.1103/PhysRevE.91.040101.
     -   Aoki's method for computing innovations-form parameters for a
         state-space model allows for zero-lag coefficients.
-    -   Based on the 'varma2iss' MATLAB function.
     """
     AF_shape = AF.shape
     if len(AF_shape) != 2:
@@ -502,7 +494,6 @@ def iss_to_usgc(
     -----
     -   Reference(s): [1] Barnett, L. & Seth, A.K., 2015, Physical Review, DOI:
         10.1103/PhysRevE.91.040101.
-    -   Based on the 'iss_SGC' MATLAB function.
     """
     f = np.zeros(len(freqs))
     z = np.exp(
@@ -574,7 +565,6 @@ def iss_to_tf(A: NDArray, C: NDArray, K: NDArray, z: NDArray) -> NDArray:
     -   In the frequency domain, the back-shift operator, z, is a vector of
         points on a unit circle in the complex plane. z = e^-iw, where -pi < w
         <= pi. See Ref. 17 of [1].
-    -   Based on the 'iss_MA' MATLAB function.
     """
     if len(A.shape) != 2:
         raise ValueError(
@@ -652,7 +642,6 @@ def partial_covariance(
         indices i and j, given k (V_ij|k), is equivalent to
         V_ij - V_ik * V_kk^-1 * V_kj. In this case, i and j are seeds, and k is
         the targets.
-    -   Based on the 'parcovar' MATLAB function.
     """
     if len(V.shape) != 2:
         raise ValueError(
@@ -708,10 +697,6 @@ def block_ifft(data: NDArray, n_points: Union[int, None] = None) -> NDArray:
     ------
     ValueError
     -   Raised if 'data' does not have three dimensions.
-
-    NOTES
-    -----
-    -   Based on the 'bifft' MATLAB function.
     """
     data_shape = data.shape
     if n_points is None:
@@ -754,7 +739,6 @@ def discrete_lyapunov(A: NDArray, Q: NDArray) -> NDArray:
     -   References: [1] Kitagawa G., 1977, International Journal of Control,
         DOI: 10.1080/00207177708922266; [2] Hammarling S.J., 1982, IMA Journal
         of Numerical Analysis, DOI: 10.1093/imanum/2.3.303.
-    -   Based on the 'dlyap' and 'lyapslv' MATLAB functions.
     """
     n = A.shape[0]
     if n != A.shape[1]:
@@ -804,10 +788,9 @@ def discrete_lyapunov(A: NDArray, Q: NDArray) -> NDArray:
 
         j = j - 1
 
-    # Convert back to original coordinates
-    X = np.matmul(U, np.matmul(X, U.conj().T))
-
-    return X
+    return np.matmul(
+        U, np.matmul(X, U.conj().T)
+    )  # Convert back to original coordinates
 
 
 def cross_spectra_svd(
@@ -924,7 +907,6 @@ def mim_mic_compute_e(C: NDArray, n_seeds: int) -> NDArray:
     -----
     -   References: [1] Ewald et al., 2012, NeuroImage. DOI:
         10.1016/j.neuroimage.2011.11.084.
-    -   Based on the 'compute_mim' and 'compute_mic' MATLAB functions.
     """
     # Equation 3
     T = np.zeros(C.shape)

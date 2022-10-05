@@ -15,7 +15,6 @@ from mne.time_frequency import (
 )
 from mne_connectivity import SpectralConnectivity
 import numpy as np
-from Processing.connectivity_classes import Topographies
 from Processing.connectivity_computations import (
     max_imaginary_coherence,
     multivariate_interaction_measure,
@@ -26,8 +25,7 @@ from Processing.connectivity_computations import (
 def multivar_spectral_connectivity_epochs(
     data: Union[ArrayLike, BaseEpochs],
     indices: tuple[tuple[ArrayLike]],
-    ch_names: Union[list, None] = None,
-    ch_coords: Union[ArrayLike, None] = None,
+    names: Union[list, None] = None,
     method: Union[str, list[str]] = "mic",
     sfreq: float = 6.283185307179586,
     mode: str = "multitaper",
@@ -46,16 +44,10 @@ def multivar_spectral_connectivity_epochs(
     cwt_decim: Union[int, slice] = 1,
     n_seed_components: Union[tuple[Union[int, None]], None] = None,
     n_target_components: Union[tuple[Union[int, None]], None] = None,
-    mic_return_topographies: bool = False,
     gc_n_lags: int = 20,
     n_jobs: int = 1,
     verbose: Union[bool, str, int, None] = None,
-) -> Union[
-    Union[SpectralConnectivity, list[SpectralConnectivity]],
-    tuple[
-        Union[SpectralConnectivity, list[SpectralConnectivity]], Topographies
-    ],
-]:
+) -> Union[SpectralConnectivity, list[SpectralConnectivity]]:
     """Compute frequency-domain multivariate connectivity measures.
 
     The connectivity method(s) are specified using the "method" parameter. All
@@ -74,14 +66,9 @@ def multivar_spectral_connectivity_epochs(
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
-    ch_names : list | None; default None
+    names : list | None; default None
     -   Names of the channels in the data. If "data" is an Epochs object, these
         channel names will override those in the object.
-
-    ch_coords : array of array of float | None; default None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data. If "data" is an Epochs object, these coordinates will override
-        those in the object.
 
     method : str | list of str; default "mic"
     -   Connectivity measure(s) to compute. These can be ['mic', 'mim', 'gc',
@@ -162,10 +149,6 @@ def multivar_spectral_connectivity_epochs(
         channels' data for each connectivity node. If None, or if an individual
         entry is None, no dimensionality reduction is performed.
 
-    mic_return_topographies : bool; default False
-    -   Whether or not to return spatial topographies for the connectivity. Only
-        used if "method" is 'mic'.
-
     gc_n_lags : int; default 20
     -   The number of lags to use when computing the autocovariance sequence
         from the cross-spectral density. Only used if "method" is 'gc',
@@ -181,63 +164,45 @@ def multivar_spectral_connectivity_epochs(
 
     RETURNS
     -------
-    results : SpectralConnectivity | list[SpectralConnectivity] |
-    tuple(SpectralConnectivity, numpy object array) |
-    tuple(list[SpectralConnectivity], numpy object array)
-    -   The connectivity (and optionally spatial topography) results.
-    -   If "mic_return_topographies" is True and 'mic' is present in "method", a
-        tuple of length two is returned, where the first entry is the
-        connectivity results, and the second entry are the spatial topographies
-        for maximmised imaginary coherence. If 'mic' is not present in "method",
-        only the connectivity results are returned.
-    -   If "method" contains multiple entries, the connectivity results will be
-        a list of SpectralConnectivity object, where each object is the results
-        for the corresponding method in "method".
+    results : SpectralConnectivity | list[SpectralConnectivity]
+    -   The connectivity results as a single SpectralConnectivity object (if
+        only one method is called) or a list of SpectralConnectivity objects (if
+        multiple methods are called, where each object is the results for the
+        corresponding entry in "method").
     """
     data = deepcopy(data)
 
-    _check_inputs(
+    nodes = _check_inputs(
         data=data,
         indices=indices,
-        ch_names=ch_names,
-        ch_coords=ch_coords,
+        names=names,
         method=method,
         mode=mode,
         n_seed_components=n_seed_components,
         n_target_components=n_target_components,
     )
 
-    (
-        ch_names,
-        ch_coords,
-        method,
-        picks,
-        n_seed_components,
-        n_target_components,
-    ) = _sort_inputs(
+    data, indices = _pick_channels(
         data=data,
-        ch_names=ch_names,
-        ch_coords=ch_coords,
+        nodes=nodes,
+        indices=indices,
+    )
+
+    names, method, n_seed_components, n_target_components = _sort_inputs(
+        names=names,
+        n_nodes=len(nodes),
         method=method,
         indices=indices,
         n_seed_components=n_seed_components,
         n_target_components=n_target_components,
     )
 
-    data, ch_names, ch_coords, indices = _pick_channels(
-        data=data,
-        ch_names=ch_names,
-        ch_coords=ch_coords,
-        picks=picks,
-        indices=indices,
-    )
     n_epochs = _get_n_epochs(data)
 
     csd = _compute_csd(
         data=data,
         sfreq=sfreq,
         mode=mode,
-        ch_names=ch_names,
         t0=t0,
         tmin=tmin,
         tmax=tmax,
@@ -261,12 +226,10 @@ def multivar_spectral_connectivity_epochs(
         method=method,
         n_seed_components=n_seed_components,
         n_target_components=n_target_components,
-        mic_return_topographies=mic_return_topographies,
         gc_n_lags=gc_n_lags,
         mode=mode,
         n_epochs=n_epochs,
-        ch_names=ch_names,
-        ch_coords=ch_coords,
+        names=names,
         verbose=verbose,
     )
 
@@ -274,13 +237,12 @@ def multivar_spectral_connectivity_epochs(
 def _check_inputs(
     data: Union[BaseEpochs, ArrayLike],
     indices: tuple[tuple[ArrayLike]],
-    ch_names: Union[list, None],
-    ch_coords: Union[ArrayLike, None],
+    names: Union[list, None],
     method: Union[str, list[str]],
     mode: str,
     n_seed_components: Union[tuple[Union[int, None]], None] = None,
     n_target_components: Union[tuple[Union[int, None]], None] = None,
-) -> None:
+) -> list[int]:
     """Checks the values of the input parameters to the
     "multivar_spectral_connectivity_epochs" function.
 
@@ -293,9 +255,10 @@ def _check_inputs(
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
-    ch_coords : array of array of float | None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data.
+    names : list | None
+    -   The names of the nodes of the dataset used to compute connectivity. If
+        'None', then names will be a list of intergers from 0 to the number of
+        nodes.
 
     method : list[str]
     -   Connectivity measure(s) to compute.
@@ -312,6 +275,11 @@ def _check_inputs(
         channels' data for each connectivity node. If None, will be replaced
         with a tuple of None.
 
+    RETURNS
+    -------
+    nodes : list[int]
+    -   Index values of nodes of the dataset used to compute connectivity.
+
     RAISES
     ------
     TypeError
@@ -322,9 +290,7 @@ def _check_inputs(
     -   Raised if the "mode" is not recognised.
 
     ValueError
-    -   Raised if the length of "ch_names" and the number of channels in the
-        data do not match.
-    -   Raised if the length of "ch_coords" and the number of channels in the
+    -   Raised if the length of "names" and the number of channels in the
         data do not match.
     -   Raised if the length of "indices" is not equal to two.
     -   Raised if the length of the seed and target values in "indices" do not
@@ -335,26 +301,28 @@ def _check_inputs(
         "n_target_components" is greater than the number of channels at the
         corresponding connectivity node for each seed or target, respectively.
     """
+    # Checks data type
     if not isinstance(data, (BaseEpochs, list, tuple, np.ndarray)):
         raise TypeError(
             "The data must be either an MNE Epochs object, or an array."
         )
 
-    if isinstance(data, BaseEpochs):
-        n_chs = len(data.info["ch_names"])
-    else:
-        n_chs = np.shape(data)[1]
-    if ch_coords and n_chs != len(ch_coords):
+    # Checks names
+    nodes = np.unique(
+        [
+            idx
+            for indices_group in indices
+            for idcs in indices_group
+            for idx in idcs
+        ]
+    )
+    if names and len(names) != len(nodes):
         raise ValueError(
-            f"The number of channels ({n_chs}) and provided coordinates "
-            f"({len(ch_coords)}) do not match."
-        )
-    if ch_names and n_chs != len(ch_names):
-        raise ValueError(
-            f"The number of channels ({n_chs}) and provided channel names "
-            f"({len(ch_coords)}) do not match."
+            f"The number of nodes ({len(nodes)}) and provided channel names "
+            f"({len(names)}) do not match."
         )
 
+    # Checks methods
     supported_methods = ["mic", "mim", "gc", "net_gc", "trgc", "net_trgc"]
     if isinstance(method, str):
         if method not in supported_methods:
@@ -367,6 +335,7 @@ def _check_inputs(
                 "One or more methods are not supported connectivity methods."
             )
 
+    # Checks modes
     supported_modes = ["fourier", "multitaper", "morlet"]
     if mode not in supported_modes:
         raise NotImplementedError(
@@ -374,6 +343,7 @@ def _check_inputs(
             "cross-spectral density."
         )
 
+    # Checks indices
     if len(indices) != 2:
         raise ValueError(
             "The indices should have a length of two, consisting of index "
@@ -387,6 +357,7 @@ def _check_inputs(
             f"{len(indices[1])}, respectively."
         )
 
+    # Checks seed and target components
     if (
         n_seed_components
         and n_target_components
@@ -428,39 +399,74 @@ def _check_inputs(
                     f"({len(chs)})."
                 )
 
+    return nodes
+
+
+def _pick_channels(
+    data: Union[ArrayLike, BaseEpochs],
+    nodes: list[int],
+    indices: tuple[tuple[ArrayLike]],
+) -> tuple[Union[ArrayLike, BaseEpochs], tuple[tuple[ArrayLike]]]:
+    """Selects only the channels being used in the connectivity computations
+    from the data.
+
+    PARAMETERS
+    ----------
+    data : Epochs | array
+    -   The data on which connectivity is being computed. If an array, should
+        have the shape [n_epochs, n_signals, n_times].
+
+    nodes : list[int]
+    -   Index values of nodes of the dataset used to compute connectivity.
+
+    indices : tuple of tuple of array of int
+    -   Two tuples of arrays with indices of connections for which to compute
+        connectivity.
+
+    RETURNS
+    -------
+    data : Epochs | array
+    -   The data with only the channels being used in the connectivity
+        computations.
+
+    indices : tuple of tuple of array of int
+    -   Two tuples of arrays with indices of connections for which to compute
+        connectivity updated to reflect any changes resulting from dropping
+        channels.
+    """
+    if isinstance(data, BaseEpochs):
+        data = data.pick_channels(
+            ch_names=[data.info["ch_names"][node] for node in nodes],
+            ordered=True,
+        )
+    else:
+        data = data[:, nodes, :]
+
+    indices = _update_indices(indices=indices, picks=nodes)
+
+    return data, indices
+
 
 def _sort_inputs(
-    data: Union[BaseEpochs, ArrayLike],
-    ch_names: Union[list, None],
-    ch_coords: Union[ArrayLike, None],
+    names: Union[list, None],
+    n_nodes: int,
     method: Union[str, list[str]],
     indices: tuple[tuple[ArrayLike]],
     n_seed_components: Union[tuple[Union[int, None]], None] = None,
     n_target_components: Union[tuple[Union[int, None]], None] = None,
-) -> tuple[
-    list,
-    Union[ArrayLike, None],
-    list[str],
-    NDArray[np.int],
-    tuple[Union[int, None], tuple[Union[int, None]]],
-]:
+) -> tuple[list, list[str], tuple[Union[int, None]], tuple[Union[int, None]],]:
     """Sorts the format of the input parameters to the
     "multivar_spectral_connectivity_epochs" function.
 
     PARAMETERS
     ----------
-    data : Epochs | array
-    -   The data on which connectivity is being computed.
+    names : list | None
+    -   Names of the nodes of the dataset used to compute connectivity. If
+        'None', the names will be a list of integers from 0 to the number of
+        nodes.
 
-    ch_names : list | None
-    -   Names of the channels in the data. If None and "data" is an Epochs
-        object, the names from the Epochs object will be used. If None and
-        "data" is an array, the names will be a list of strings from '0' to the
-        number of channels in the data.
-
-    ch_coords : array of array of float | None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data.
+    n_nodes : int
+    -   The number of nodes used to compute connectivity.
 
     method : str | list of str
     -   Connectivity measure(s) to compute. If a str, will be converted to a
@@ -484,18 +490,11 @@ def _sort_inputs(
 
     RETURNS
     -------
-    ch_names : list
-    -   Names of the channels in the data.
-
-    ch_coords : array of array of float | None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data.
+    names : list
+    -   Names of the nodes used to compute connectivity.
 
     method : list[str]
     -   Connectivity measure(s) to compute.
-
-    picks : array of int
-    -   Indices of the channels being used in the connectivity computations.
 
     n_seed_components : tuple of int or None
     -   Dimensionality reduction parameter specifying the number of seed
@@ -507,25 +506,11 @@ def _sort_inputs(
         components to extract from the single value decomposition of the target
         channels' data for each connectivity node.
     """
-    if not ch_names:
-        if isinstance(data, BaseEpochs):
-            ch_names = data.info["ch_names"]
-        else:
-            ch_names = [str(i) for i in range(np.shape(data)[1])]
-
-    if not ch_coords:
-        if isinstance(data, BaseEpochs):
-            ch_coords = data._get_channel_positions(picks=ch_names)
+    if not names:
+        names = [i for i in range(n_nodes)]
 
     if isinstance(method, str):
         method = [method]
-
-    picks = np.unique(
-        [
-            *[seed for seeds in indices[0] for seed in seeds],
-            *[target for targets in indices[1] for target in targets],
-        ]
-    )
 
     if not n_seed_components:
         n_seed_components = tuple([None] * len(indices[0]))
@@ -533,84 +518,11 @@ def _sort_inputs(
         n_target_components = tuple([None] * len(indices[1]))
 
     return (
-        ch_names,
-        ch_coords,
+        names,
         method,
-        picks,
         n_seed_components,
         n_target_components,
     )
-
-
-def _pick_channels(
-    data: Union[ArrayLike, BaseEpochs],
-    ch_names: list,
-    ch_coords: Union[ArrayLike, None],
-    picks: NDArray[np.int],
-    indices: tuple[tuple[ArrayLike]],
-) -> tuple[
-    Union[ArrayLike, BaseEpochs],
-    list,
-    Union[ArrayLike, None],
-    tuple[tuple[ArrayLike]],
-]:
-    """Selects only the channels being used in the connectivity computations
-    from the data.
-
-    PARAMETERS
-    ----------
-    data : Epochs | array
-    -   The data on which connectivity is being computed. If an array, should
-        have the shape [n_epochs, n_signals, n_times].
-
-    ch_names : list
-    -   Names of the channels in the data.
-
-    ch_coords : array of array of float | None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data.
-
-    picks : array of int
-    -   Indices of the channels being used in the connectivity computation.
-
-    indices : tuple of tuple of array of int
-    -   Two tuples of arrays with indices of connections for which to compute
-        connectivity.
-
-    RETURNS
-    -------
-    data : Epochs | array
-    -   The data with only the channels being used in the connectivity
-        computations.
-
-    ch_names : list
-    -   Names of the channels being used in the connectivity computations.
-
-    ch_coords : array of array of float | None
-    -   X-, y-, and z-axis coordinates stored in arrays for each channel in the
-        data.
-
-    indices : tuple of tuple of array of int
-    -   Two tuples of arrays with indices of connections for which to compute
-        connectivity updated to reflect any changes resulting from dropping
-        channels.
-    """
-    if isinstance(data, BaseEpochs):
-        data = data.pick_channels(
-            ch_names=[data.info["ch_names"][pick] for pick in picks],
-            ordered=True,
-        )
-    else:
-        data = data[:, picks, :]
-
-    if ch_coords is not None:
-        ch_coords = ch_coords[picks, :]
-    if ch_names is not None:
-        ch_names = [name for ch_i, name in enumerate(ch_names) if ch_i in picks]
-
-    indices = _update_indices(indices=indices, picks=picks)
-
-    return data, ch_names, ch_coords, indices
 
 
 def _update_indices(
@@ -675,7 +587,6 @@ def _compute_csd(
     data: Union[ArrayLike, BaseEpochs],
     sfreq: float,
     mode: str,
-    ch_names: list,
     t0: float,
     tmin: Union[float, None],
     tmax: Union[float, None],
@@ -703,75 +614,71 @@ def _compute_csd(
     sfreq : float; default 6.283185307179586
     -   Sampling frequency of the data. Only used if "data" is an array.
 
-    mode : str; default "multitaper"
+    mode : str
     -   Cross-spectral estimation method. Can be 'fourier', 'multitaper', or
         'cwt_wavelet'.
 
-    ch_names : list | None; default None
-    -   Names of the channels in the data. If "data" is an Epochs object, these
-        channel names will override those in the object.
-
-    t0 : float; default 0.0
+    t0 : float
     -   Time of the first sample relative to the onset of the epoch, in seconds.
         Only used if "data" is an array.
 
-    tmin : float | None; default None
+    tmin : float | None
     -   The time at which to start computing connectivity, in seconds. If None,
         starts from the first sample.
 
-    tmax : float | None; default None
+    tmax : float | None
     -   The time at which to stop computing connectivity, in seconds. If None,
         ends with the final sample.
 
-    fmt_fmin : float; default 0.0
+    fmt_fmin : float
     -   Minumum frequency of interest, in Hz. Only used if "mode" is 'fourier'
         or 'multitaper'.
 
-    fmt_fmax : float; default infinity
+    fmt_fmax : float
     -   Maximum frequency of interest, in Hz. Only used if "mode" is 'fourier'
         or 'multitaper'.
 
-    cwt_freqs : list of float | None; default None
+    cwt_freqs : list of float | None
     -   The frequencies of interest, in Hz. If "mode" is 'cwt_morlet', this
         cannot be None. Only used if "mode" if 'cwt_morlet'.
 
-    fmt_n_fft : int | None; default None
+    fmt_n_fft : int | None
     -   Length of the FFT. If None, the exact number of samples between "tmin"
         and "tmax" will be used. Only used if "mode" is 'fourier' or
         'multitaper'.
 
-    cwt_use_fft : bool; default True
+    cwt_use_fft : bool
     -   Whether to use FFT-based convolution to compute the wavelet transform.
         Only used if "mode" is 'cwt_morlet'.
 
-    mt_bandwidth : float | None; default None
+    mt_bandwidth : float | None
     -   Bandwidth of the multitaper windowing function, in Hz. Only used if
         "mode" if 'multitaper'.
 
-    mt_adaptive : bool; default False
+    mt_adaptive : bool
     -   Whether or not to use adaptive weights to combine the tapered spectra
         into the power spectral density. Only used if "mode" if 'multitaper'.
 
-    mt_low_bias : bool; default True
+    mt_low_bias : bool
     -   Whether or not to only use tapers with over 90% spectral concentration
         within the bandwidth. Only used if "mode" if 'multitaper'.
 
-    cwt_n_cycles : float | list of float; default 7.0
+    cwt_n_cycles : float | list of float
     -   Number of cycles to use when constructing the Morlet wavelets. Can be a
         single number, or one per frequency. Only used if "mode" if
         'cwt_morlet'.
 
-    cwt_decim : int | slice; default 1
+    cwt_decim : int | slice
     -   To redice memory usage, decimation factor during time-frequency
         decomposition. Default to 1 (no decimation). If int, uses
         tfr[..., ::"decim"]. If slice, used tfr[..., "decim"]. Only used if
         "mode" is 'cwt_morlet'.
 
-    n_jobs : int; default 1
+    n_jobs : int
     -   Number of jobs to run in parallel when computing the cross-spectral
         density.
 
-    verbose : bool | str | int | None; default None
+    verbose : bool | str | int | None
     -   Whether or not to print information about the status of the connectivity
         computations. See MNE's logging information for further details.
 
@@ -833,7 +740,7 @@ def _compute_csd(
                 fmax=fmt_fmax,
                 tmin=tmin,
                 tmax=tmax,
-                ch_names=ch_names,
+                ch_names=None,
                 n_fft=fmt_n_fft,
                 projs=None,
                 n_jobs=n_jobs,
@@ -848,7 +755,7 @@ def _compute_csd(
                 fmax=fmt_fmax,
                 tmin=tmin,
                 tmax=tmax,
-                ch_names=ch_names,
+                ch_names=None,
                 n_fft=fmt_n_fft,
                 bandwidth=mt_bandwidth,
                 adaptive=mt_adaptive,
@@ -864,7 +771,7 @@ def _compute_csd(
             t0=t0,
             tmin=tmin,
             tmax=tmax,
-            ch_names=ch_names,
+            ch_names=None,
             n_cycles=cwt_n_cycles,
             use_fft=cwt_use_fft,
             decim=cwt_decim,
@@ -880,19 +787,12 @@ def _compute_connectivity(
     method: list[str],
     n_seed_components: Union[tuple[Union[int, None]], None],
     n_target_components: Union[tuple[Union[int, None]], None],
-    mic_return_topographies: bool,
     gc_n_lags: int,
     mode: str,
     n_epochs: int,
-    ch_names: list,
-    ch_coords: Union[ArrayLike, None],
+    names: list,
     verbose: bool,
-) -> Union[
-    Union[SpectralConnectivity, list[SpectralConnectivity]],
-    tuple[
-        Union[SpectralConnectivity, list[SpectralConnectivity]], Topographies
-    ],
-]:
+) -> Union[SpectralConnectivity, list[SpectralConnectivity]]:
     """Computes connectivity results from the cross-spectral density.
 
     PARAMETERS
@@ -906,10 +806,6 @@ def _compute_connectivity(
 
     method : list of str
     -   Connectivity measure(s) to compute.
-
-    mic_return_topographies : bool; default False
-    -   Whether or not to return spatial topographies for the connectivity. Only
-        used if the method is 'mic'.
 
     n_seed_components : tuple of int or None
     -   Dimensionality reduction parameter specifying the number of seed
@@ -932,33 +828,21 @@ def _compute_connectivity(
     n_epochs : int
     -   The number of epochs used to compute the cross-spectral density.
 
-    ch_names : list
-    -   The names of the channels in the data.
-
-    ch_coords : array of array of float | None
-    -   The x-, y-, and z-axis coordinates stored in arrays for each channel in
-        the data.
+    names : list
+    -   The names of the nodes of the dataset used to compute connectivity.
 
     verbose: bool
     -   Whether or not to print information about the connectivity computations.
 
     RETURNS
     -------
-    connectivity : SpectralConnectivity | list[SpectralConnectivity] |
-    tuple(SpectralConnectivity, Topographies) |
-    tuple(list[SpectralConnectivity], Topographies)
-    -   The connectivity (and optionally spatial topography) results.
-    -   If "mic_return_topographies" is True and 'mic' is present in "method", a
-        tuple of length two is returned, where the first entry is the
-        connectivity results, and the second entry are the spatial topographies
-        for maximmised imaginary coherence. If 'mic' is not present in "method",
-        only the connectivity results are returned.
-    -   If "method" contains multiple entries, the connectivity results will be
-        a list of SpectralConnectivity object, where each object is the results
-        for the corresponding method in "method".
+    connectivity : SpectralConnectivity | list[SpectralConnectivity]
+    -   The connectivity results as a single SpectralConnectivity object (if
+        only one method is called) or a list of SpectralConnectivity objects (if
+        multiple methods are called, where each object is the results for the
+        corresponding entry in "method").
     """
     connectivity = []
-    topographies = None
     csd_matrix = np.transpose(
         np.asarray([csd.get_data(freq) for freq in csd.frequencies]), (1, 2, 0)
     )
@@ -973,11 +857,7 @@ def _compute_connectivity(
                 targets=indices[1],
                 n_seed_components=n_seed_components,
                 n_target_components=n_target_components,
-                return_topographies=mic_return_topographies,
             )
-            if mic_return_topographies:
-                topographies = deepcopy(con[1])
-                con = con[0]
         elif con_method == "mim":
             con = multivariate_interaction_measure(
                 csd=csd_matrix,
@@ -1003,26 +883,14 @@ def _compute_connectivity(
         data=connectivity,
         freqs=csd.frequencies,
         indices=indices,
-        ch_names=ch_names,
+        names=names,
         method=method,
         spec_method=mode,
         n_epochs_used=n_epochs,
     )
-    if topographies:
-        topographies = _handle_topographies(
-            data=topographies,
-            freqs=csd.frequencies,
-            indices=indices,
-            ch_names=ch_names,
-            ch_coords=ch_coords,
-            spec_method=mode,
-            n_epochs_used=n_epochs,
-        )
 
     if len(method) == 1:
         connectivity = connectivity[0]
-    if topographies:
-        connectivity = [connectivity, topographies]
 
     return connectivity
 
@@ -1031,7 +899,7 @@ def _connectivity_to_mne(
     data: list[NDArray],
     freqs: NDArray[np.float],
     indices: tuple[tuple[ArrayLike]],
-    ch_names: list,
+    names: list,
     method: list[str],
     spec_method: str,
     n_epochs_used: int,
@@ -1051,8 +919,8 @@ def _connectivity_to_mne(
     -   Two tuples of arrays with indices of connections used to compute
         connectivity.
 
-    ch_names : list
-    -   Names of the channels used to compute connectivity.
+    names : list
+    -   The names of the nodes of the dataset used to compute connectivity.
 
     method : list of str
     -   Computed connectivity measure(s).
@@ -1077,8 +945,8 @@ def _connectivity_to_mne(
             SpectralConnectivity(
                 data=con_data,
                 freqs=freqs,
-                n_nodes=len(ch_names),
-                names=ch_names,
+                n_nodes=len(names),
+                names=names,
                 indices=indices,
                 method=method[method_i],
                 spec_method=spec_method,
@@ -1087,62 +955,3 @@ def _connectivity_to_mne(
         )
 
     return connectivity
-
-
-def _handle_topographies(
-    data: tuple[NDArray],
-    freqs: NDArray,
-    indices: tuple[tuple[ArrayLike]],
-    ch_names: list[str],
-    ch_coords: Union[ArrayLike, None],
-    spec_method: str,
-    n_epochs_used: int,
-) -> Topographies:
-    """Stores the spatial topography results in a placeholder object.
-
-    PARAMETERS
-    ----------
-    data : tuple(numpy object array, numpy object array)
-    -   Spatial topographies of connectivity for seeds and targets,
-        respectively. The entries for seeds and targets have dimensions [nodes x
-        signals x frequencies], where signals correspond to the number of seed
-        and target signals in each node, respectively.
-
-    freqs : array of float
-    -   The frequencies in the connectivity results.
-
-    indices : tuple of tuple of array of int
-    -   Two tuples of arrays with indices of connections used to compute
-        connectivity.
-
-    ch_names : list
-    -   Names of the channels used to compute connectivity.
-
-    ch_coords : array of array of float | None
-    -   The x-, y-, and z-axis coordinates stored in arrays for each channel in
-        the data.
-
-    spec_method : str
-    -   Method used to compute the cross-spectral density on which the
-        connectivity results are based.
-
-    n_epochs_used : int
-    -   Number of epochs used to compute the cross-spectral density on which the
-        connectivity results are based.
-
-    RETURNS
-    -------
-    Topographies
-    -   The spatial topography results stored in a placeholder object.
-    """
-    return Topographies(
-        data=data,
-        freqs=freqs,
-        n_nodes=len(ch_names),
-        names=ch_names,
-        coords=ch_coords,
-        indices=indices,
-        method="mic",
-        spec_method=spec_method,
-        n_epochs_used=n_epochs_used,
-    )

@@ -1,6 +1,5 @@
 """An example pipeline for analysing multivariate connectivity."""
 
-from copy import deepcopy
 import json
 from mne import read_epochs
 from Processing.helper_functions import multivar_seed_target_indices
@@ -20,6 +19,7 @@ indices = multivar_seed_target_indices(settings["seeds"], settings["targets"])
 results = multivar_spectral_connectivity_epochs(
     data=data,
     indices=indices,
+    names=data.info["ch_names"],
     method=settings["method"],
     mode=settings["mode"],
     tmin=settings["tmin"],
@@ -36,18 +36,17 @@ results = multivar_spectral_connectivity_epochs(
     cwt_decim=settings["cwt_decim"],
     n_seed_components=settings["n_seed_components"],
     n_target_components=settings["n_target_components"],
-    mic_return_topographies=settings["mic_return_topographies"],
     gc_n_lags=settings["gc_n_lags"],
     n_jobs=settings["n_jobs"],
     verbose=settings["verbose"],
 )
 
 ## Extract connectivity results
-connectivity = {}
-if "mic" in settings["method"] and settings["mic_return_topographies"]:
-    connectivity["mic_topographies"] = deepcopy(results[1])
-    results = results[0]
-for con, method in zip(results, settings["method"]):
-    connectivity[method] = con
+if isinstance(settings["method"], list) and len(settings["method"]) > 1:
+    connectivity = {}
+    for con, method in zip(results, settings["method"]):
+        connectivity[method] = con
+else:
+    connectivity = results
 
 print("Finished!")
