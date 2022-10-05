@@ -5,27 +5,23 @@
             1,
             2,
             3,
-            4
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
         ],
         [
             0,
-            1
-        ],
-        [
+            1,
             2,
-            3
-        ],
-        [
+            3,
             4
         ]
     ],
     "targets": [
         [
-            5,
-            6,
-            7,
-            8,
-            9,
             10,
             11,
             12,
@@ -56,19 +52,14 @@
     "mt_low_bias": true,
     "cwt_n_cycles": 7.0,
     "cwt_decim": 1,
-    "mic_return_topographies": true,
     "gc_n_lags": 20,
     "n_seed_components": [
-        5,
-        2,
-        2,
-        1
+        10,
+        3
     ],
     "n_target_components": [
-        7,
-        7,
-        7,
-        7
+        10,
+        5
     ],
     "n_jobs": 3,
     "verbose": true
