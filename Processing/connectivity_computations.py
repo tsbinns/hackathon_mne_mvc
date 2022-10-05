@@ -1,7 +1,7 @@
 """Methods for computing connectivity metrics.
 
-METHODS
--------
+FUNCTIONS
+---------
 multivariate_interaction_measure
 -   Computes the multivariate interaction measure between two groups of signals.
 
@@ -15,9 +15,10 @@ autocov_to_gc
 -   Computes frequency-domain Granger causality from an autocovariance sequence.
 """
 
+from statistics import covariance
 from typing import Union
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from Processing.matlab_functions import reshape
 from Processing.signal_processing import (
     autocov_to_full_var,
@@ -31,10 +32,10 @@ from Processing.signal_processing import (
 
 def multivariate_interaction_measure(
     csd: NDArray,
-    seeds: list[list[Union[int, float]]],
-    targets: list[list[Union[int, float]]],
-    n_seed_components: Union[list[Union[int, None]], None] = None,
-    n_target_components: Union[list[Union[int, None]], None] = None,
+    seeds: tuple[ArrayLike],
+    targets: tuple[ArrayLike],
+    n_seed_components: tuple[Union[int, None]],
+    n_target_components: tuple[Union[int, None]],
 ) -> NDArray:
     """Computes the multivariate interaction measure between two sets of
     signals.
@@ -45,34 +46,34 @@ def multivariate_interaction_measure(
     -   Cross-spectral density with dimensions [signals x signals x
         frequencies].
 
-    seeds : list[list[int]]
-    -   Indices of signals in 'csd' to treat as seeds. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    seeds : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as seeds. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of seeds.
-    -   The number of sublists must match the number of sublists in 'targets'.
+    -   The number of sublists must match the number of sublists in "targets".
 
-    targets : list[list[int]]
-    -   Indices of signals in 'csd' to treat as targets. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    targets : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as targets. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of targets.
-    -   The number of sublists must match the number of sublists in 'seeds'.
+    -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : list[int | None] | None; default None
+    n_seed_components : tuple of int or None
     -   The number of components that should be taken from the seed data after
         dimensionality reduction using singular value decomposition (SVD), with
         one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the seed data for
         any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the seed data for the corresponding connectivity node.
 
-    n_target_components : list[int | None] | None; default None
+    n_target_components : tuple of int or None
     -   The number of components that should be taken from the target data after
         dimensionality reduction using singular value decomposition (SVD), with
         one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the target data
         for any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the target data for the corresponding connectivity node.
 
     RETURNS
@@ -81,40 +82,14 @@ def multivariate_interaction_measure(
     -   Array containing connectivity values for each node with dimensions
         [nodes x frequencies].
 
-    RAISES
-    ------
-    ValueError
-    -   Raised if 'C' is not three-dimensional.
-    -   Raised if the first two dimensions of 'C' are not identical.
-
     NOTES
     -----
     -   References: [1] Ewald et al., 2012, Neuroimage. DOI:
         10.1016/j.neuroimage.2011.11.084.
     """
-    if len(csd.shape) != 3:
-        raise ValueError(
-            "The cross-spectral density must have three dimensions, but "
-            f"has {len(csd.shape)}."
-        )
-    if csd.shape[0] != csd.shape[1]:
-        raise ValueError(
-            "The cross-spectral density must have the same first two "
-            f"dimensions, but these are {csd.shape[0]} and {csd.shape[1]}, "
-            "respectively."
-        )
-    if len(seeds) != len(targets):
-        raise ValueError(
-            f"The number of seed and target groups ({len(seeds)} and "
-            f"{len(targets)}, respectively) do not match."
-        )
     n_nodes = len(seeds)
-    if n_seed_components is None:
-        n_seed_components = [None] * n_nodes
-    if n_target_components is None:
-        n_target_components = [None] * n_nodes
-
     n_freqs = csd.shape[2]
+
     mim = np.zeros((n_nodes, n_freqs))
     node_i = 0
     for seed_idcs, target_idcs in zip(seeds, targets):
@@ -130,7 +105,7 @@ def multivariate_interaction_measure(
             )
 
             # Eqs. 3 & 4
-            E = mim_mic_compute_e(C=C_bar, n_seeds=U_bar_aa.shape[1])
+            E = mim_mic_compute_e(csd=C_bar, n_seeds=U_bar_aa.shape[1])
 
             # Equation 14
             mim[node_i, freq_i] = np.trace(np.matmul(E, np.conj(E).T))
@@ -141,10 +116,10 @@ def multivariate_interaction_measure(
 
 def max_imaginary_coherence(
     csd: NDArray,
-    seeds: list[list[Union[int, float]]],
-    targets: list[list[Union[int, float]]],
-    n_seed_components: Union[list[Union[int, None]], None] = None,
-    n_target_components: Union[list[Union[int, None]], None] = None,
+    seeds: tuple[ArrayLike],
+    targets: tuple[ArrayLike],
+    n_seed_components: tuple[Union[int, None]],
+    n_target_components: tuple[Union[int, None]],
 ) -> NDArray:
     """Computes the maximised imaginary coherence between two groups of signals.
 
@@ -154,34 +129,34 @@ def max_imaginary_coherence(
     -   Cross-spectral density with dimensions [signals x signals x
         frequencies].
 
-    seeds : list[list[int]]
-    -   Indices of signals in 'csd' to treat as seeds. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    seeds : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as seeds. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of seeds.
-    -   The number of sublists must match the number of sublists in 'targets'.
+    -   The number of sublists must match the number of sublists in "targets".
 
-    targets : list[list[int]]
-    -   Indices of signals in 'csd' to treat as targets. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    targets : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as targets. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of targets.
-    -   The number of sublists must match the number of sublists in 'seeds'.
+    -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : list[int | None] | None; default None
+    n_seed_components : tuple of int or None
     -   The number of components that should be taken from the seed data after
         dimensionality reduction using singular value decomposition (SVD), with
         one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the seed data for
         any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the seed data for the corresponding connectivity node.
 
-    n_target_components : list[int | None] | None; default None
+    n_target_components : tuple of int or None
     -   The number of components that should be taken from the target data after
         dimensionality reduction using singular value decomposition (SVD), with
         one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the target data
         for any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the target data for the corresponding connectivity node.
 
     RETURNS
@@ -190,41 +165,14 @@ def max_imaginary_coherence(
     -   Array containing connectivity values for each node with dimensions
         [nodes x frequencies].
 
-    RAISES
-    ------
-    ValueError
-    -   Raised if the 'C is not a three-dimensional array.
-    -   Raised if the first two dimensions of 'C' is not a square matrix with
-        lengths equal to the combined number of seed and target signals.
-
     NOTES
     -----
     -   References: [1] Ewald et al. (2012), NeuroImage. DOI:
         10.1016/j.neuroimage.2011.11.084.
     """
-    if len(csd.shape) != 3:
-        raise ValueError(
-            "The cross-spectral density must have three dimensions, but "
-            f"has {len(csd.shape)}."
-        )
-    if csd.shape[0] != csd.shape[1]:
-        raise ValueError(
-            "The cross-spectral density must have the same first two "
-            f"dimensions, but these are {csd.shape[0]} and {csd.shape[1]}, "
-            "respectively."
-        )
-    if len(seeds) != len(targets):
-        raise ValueError(
-            f"The number of seed and target groups ({len(seeds)} and "
-            f"{len(targets)}, respectively) do not match."
-        )
     n_nodes = len(seeds)
-    if n_seed_components is None:
-        n_seed_components = [None] * n_nodes
-    if n_target_components is None:
-        n_target_components = [None] * n_nodes
-
     n_freqs = csd.shape[2]
+
     mic = np.zeros((n_nodes, n_freqs))
     node_i = 0
     for seed_idcs, target_idcs in zip(seeds, targets):
@@ -241,7 +189,7 @@ def max_imaginary_coherence(
             )
 
             # Eqs. 3 & 4
-            E = mim_mic_compute_e(C=C_bar, n_seeds=U_bar_aa.shape[1])
+            E = mim_mic_compute_e(csd=C_bar, n_seeds=U_bar_aa.shape[1])
 
             # Weights for signals in the groups
             w_a, V_a = np.linalg.eigh(np.matmul(E, np.conj(E).T))
@@ -264,11 +212,11 @@ def granger_causality(
     csd: NDArray,
     freqs: list[Union[int, float]],
     method: str,
-    seeds: list[list[int]],
-    targets: list[list[int]],
-    n_seed_components: Union[list[int], None] = None,
-    n_target_components: Union[list[int], None] = None,
-    n_lags: int = 20,
+    seeds: tuple[ArrayLike],
+    targets: tuple[ArrayLike],
+    n_seed_components: tuple[Union[int, None]],
+    n_target_components: tuple[Union[int, None]],
+    n_lags: int,
 ) -> NDArray:
     """Computes frequency-domain Granger causality (GC) between two sets of
     signals.
@@ -280,7 +228,7 @@ def granger_causality(
         dimensions [n_signals x n_signals x n_frequencies].
 
     freqs : list[int | float]
-    -   Frequencies in 'csd'.
+    -   Frequencies in "csd".
 
     method : str
     -   Which form of GC to compute.
@@ -290,37 +238,37 @@ def granger_causality(
         for net TRGC, i.e. TRGC from seeds to targets minus TRGC from targets to
         seeds.
 
-    seeds : list[list[int]]
-    -   Indices of signals in 'csd' to treat as seeds. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    seeds : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as seeds. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of seeds.
-    -   The number of sublists must match the number of sublists in 'targets'.
+    -   The number of sublists must match the number of sublists in "targets".
 
-    targets : list[list[int]]
-    -   Indices of signals in 'csd' to treat as targets. Should be a list of
-        sublists, where each sublist contains the signal indices that will be
+    targets : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as targets. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
         treated as a group of targets.
-    -   The number of sublists must match the number of sublists in 'seeds'.
+    -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : list[int | None] | None; default None
-    -   The number of components that should be taken from the seed entries of
-        the CSD after dimensionality reduction using singular value
-        decomposition (SVD), with one value for each of the connectivity nodes.
+    n_seed_components : tuple of int or None
+    -   The number of components that should be taken from the seed data after
+        dimensionality reduction using singular value decomposition (SVD), with
+        one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the seed data for
         any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the seed data for the corresponding connectivity node.
 
-    n_target_components : list[int | None] | None; default None
-    -   The number of components that should be taken from the target entries of
-        the CSD after dimensionality reduction using singular value
-        decomposition (SVD), with one value for each of the connectivity nodes.
+    n_target_components : tuple of int or None
+    -   The number of components that should be taken from the target data after
+        dimensionality reduction using singular value decomposition (SVD), with
+        one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the target data
         for any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the target data for the corresponding connectivity node.
 
-    n_lags : int; default 20
+    n_lags : int
     -   Number of lags to use when computing the autocovariance sequence from
         the cross-spectra.
 
@@ -386,25 +334,7 @@ def autocov_to_gc(
     connectivity : numpy ndarray
     -   Granger causality values in a matrix with dimensions [nodes x
         frequencies], where the nodes correspond to seed-target pairs.
-
-    RAISES
-    ------
-    NotImplementedError
-    -   Raised if "method" is not supported.
     """
-    supported_methods = ["gc", "net_gc", "trgc", "net_trgc"]
-    if method not in supported_methods:
-        raise NotImplementedError(
-            f"The method '{method}' for computing frequency-domain Granger "
-            "causality is not recognised. Supported methods are "
-            f"{supported_methods}."
-        )
-    if len(indices[0]) != len(indices[1]):
-        raise ValueError(
-            f"The length of the seed and target indices ({len(indices[0])} and "
-            f"{len(indices[1])}, respectively) do not match."
-        )
-
     connectivity = np.zeros((len(autocov), len(freqs)))
     for node_i, node_autocov in enumerate(autocov):
         var_coeffs, residuals_cov = autocov_to_full_var(node_autocov)
@@ -412,12 +342,12 @@ def autocov_to_gc(
             var_coeffs,
             (var_coeffs.shape[0], var_coeffs.shape[0] * var_coeffs.shape[2]),
         )
-        A, K = full_var_to_iss(AF=var_coeffs_2d, V=residuals_cov)
+        A, K = full_var_to_iss(var_coeffs=var_coeffs_2d)
         connectivity[node_i, :] = iss_to_usgc(
-            A=A,
-            C=var_coeffs_2d,
-            K=K,
-            V=residuals_cov,
+            state_transition=A,
+            observation=var_coeffs_2d,
+            kalman_gain=K,
+            covariance=residuals_cov,
             freqs=freqs,
             seeds=indices[0][node_i],
             targets=indices[1][node_i],
@@ -425,10 +355,10 @@ def autocov_to_gc(
 
         if "net" in method:
             connectivity[node_i, :] -= iss_to_usgc(
-                A=A,
-                C=var_coeffs_2d,
-                K=K,
-                V=residuals_cov,
+                state_transition=A,
+                observation=var_coeffs_2d,
+                kalman_gain=K,
+                covariance=residuals_cov,
                 freqs=freqs,
                 seeds=indices[1][node_i],
                 targets=indices[0][node_i],

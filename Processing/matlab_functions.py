@@ -1,7 +1,7 @@
-"""Methods for performing MATLAB-equivalent functions in Python.
+"""Functions for performing MATLAB-equivalent functions in Python.
 
-METHODS
--------
+FUNCTIONS
+---------
 linsolve_transa
 -   Equivalent of calling MATLAB's 'linsolve' function with the 'TRANSA' option
     set to 'True', whereby instead of solving the equation A*X=B, the equation
@@ -18,36 +18,38 @@ kron
 """
 
 from typing import Union
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 import numpy as np
 import scipy as sp
 
 
-def linsolve_transa(A: NDArray, B: NDArray) -> NDArray:
+def linsolve_transa(A: ArrayLike, B: ArrayLike) -> NDArray:
     """Equivalent of calling MATLAB's 'linsolve' function with the 'TRANSA'
     option set to 'True', whereby instead of solving the equation A*X=B, the
     equation A'*X=B is solved (where ' is the complex conjugate transposed).
 
-    This is implemented in Python by calling scipy's 'linalg.solve' function
-    with 'transposed' set to 'True'.
-
     PARAMETERS
     ----------
-    A : numpy ndarray
+    A : array-like
     -   Variable A in the equation to solve.
 
-    B : numpy ndarray
+    B : array-like
     -   Variable B in the equation to solve.
 
     RETURNS
     -------
-    numpy array
+    X : numpy ndarray
     -   Variable X in the equation to solve.
+
+    NOTES
+    -----
+    -   This is implemented in Python by calling scipy's 'linalg.solve' function
+        with 'transposed' set to 'True'.
     """
     return sp.linalg.solve(A, B, transposed=True)
 
 
-def reshape(array: NDArray, dims: Union[int, tuple[int]]) -> NDArray:
+def reshape(array: ArrayLike, dims: Union[int, tuple[int]]) -> NDArray:
     """Equivalent to the MATLAB 'reshape' function, whereby the elements from
     the first axis onwards are taken in some order for the reshaping (i.e. from
     axis 0 to n).
@@ -57,15 +59,15 @@ def reshape(array: NDArray, dims: Union[int, tuple[int]]) -> NDArray:
 
     PARAMETERS
     ----------
-    array : numpy ndarray
+    array : array-like
     -   Array which will be reshaped.
 
-    dims : int | tuple[int]
+    dims : int | tuple of int
     -   The dimensions of the reshaped array.
 
     RETURNS
     -------
-    numpy ndarray
+    reshaped_array : numpy ndarray
     -   The reshaped array.
 
     NOTES
@@ -75,16 +77,16 @@ def reshape(array: NDArray, dims: Union[int, tuple[int]]) -> NDArray:
     return np.reshape(array, dims, order="F")
 
 
-def kron(A: NDArray, B: NDArray) -> NDArray:
+def kron(A: ArrayLike, B: ArrayLike) -> NDArray:
     """Equivalent to the MATLAB 'kron' function, in which the Kronecker product
     is calculated.
 
     PARAMETERS
     ----------
-    A : numpy ndarray
+    A : array-like
     -   A matrix to take the Kronecker product of with 'B'.
 
-    B : numpy ndarray
+    B : array-like
     -   A matrix to take the Kronecker product of with 'A'.
 
     RETURNS
@@ -99,8 +101,5 @@ def kron(A: NDArray, B: NDArray) -> NDArray:
         used.
     """
     if not sp.sparse.issparse(A) and not sp.sparse.issparse(B):
-        K = np.kron(A, B)
-    else:
-        K = sp.sparse.kron(A, B)
-
-    return K
+        return np.kron(A, B)
+    return sp.sparse.kron(A, B)

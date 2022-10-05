@@ -1,7 +1,7 @@
-"""Methods for performing signal processing computations.
+"""Functions for performing signal processing computations.
 
-METHODS
--------
+FUNCTIONS
+---------
 csd_to_autocov
 -   Computes the autocovariance sequence from the cross-spectral density.
 
@@ -43,26 +43,26 @@ cross_spectra_svd
     singular value decomposition (SVD), if requested.
 
 mim_mic_compute_e
--   Computes 'E' as the imaginary part of the transformed connectivity matrix
-    'D' derived from the original connectivity matrix 'C' between the seed and
-    target signals.
+-   Computes E as the imaginary part of the transformed connectivity matrix D
+    derived from the original cross-spectral density between the seed and target
+    signals.
 """
 
 from typing import Union
 import numpy as np
 from scipy import linalg as spla
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from Processing.check_entries import check_posdef, check_svd_params
 from Processing.matlab_functions import reshape, kron, linsolve_transa
 
 
 def csd_to_autocov(
     csd: NDArray,
-    seeds: list[list[int]],
-    targets: list[list[int]],
-    n_seed_components: Union[list[int], None] = None,
-    n_target_components: Union[list[int], None] = None,
-    n_lags: Union[int, None] = None,
+    seeds: tuple[ArrayLike],
+    targets: tuple[ArrayLike],
+    n_seed_components: tuple[Union[int, None]],
+    n_target_components: tuple[Union[int, None]],
+    n_lags: int,
 ) -> tuple[list[NDArray], tuple[list[list[int]]]]:
     """Computes the autocovariance sequence from the cross-spectral density.
 
@@ -70,39 +70,41 @@ def csd_to_autocov(
     ----------
     csd : numpy array
     -   Three-dimensional matrix of the cross-spectral density.
-    -   Expects a matrix with dimensions [signals x ignals x n_frequencies],
+    -   Expects a matrix with dimensions [signals x signals x frequencies],
         where the third dimension corresponds to different frequencies.
 
-    seeds : list of list of int
-    -   Connectivity indices for each set of seeds as a list of int based on the
-        position of the signals in "csd".
+    seeds : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as seeds. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
+        treated as a group of seeds.
+    -   The number of sublists must match the number of sublists in "targets".
 
-    targets : list of list of int
-    -   Connectivity indices for each set of targets as a list of int based on
-        the position of the signals in "csd".
+    targets : tuple of array-like of int
+    -   Indices of signals in "csd" to treat as targets. Should be a tuple of
+        arrays, where each array contains the signal indices that will be
+        treated as a group of targets.
+    -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : list[int | None] | None; default None
-    -   The number of components that should be taken from the seed entries of
-        the CSD after dimensionality reduction using singular value
-        decomposition (SVD), with one value for each of the connectivity nodes.
+    n_seed_components : tuple of int or None
+    -   The number of components that should be taken from the seed data after
+        dimensionality reduction using singular value decomposition (SVD), with
+        one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the seed data for
         any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the seed data for the corresponding connectivity node.
 
-    n_target_components : list[int | None] | None; default None
-    -   The number of components that should be taken from the target entries of
-        the CSD after dimensionality reduction using singular value
-        decomposition (SVD), with one value for each of the connectivity nodes.
+    n_target_components : tuple of int or None
+    -   The number of components that should be taken from the target data after
+        dimensionality reduction using singular value decomposition (SVD), with
+        one value for each of the connectivity nodes.
     -   If 'None', no dimensionality reduction is performed on the target data
         for any of the connectivity nodes.
-    -   If some values in the list are 'None', no dimensionality reduction is
+    -   If some values in the tuple are 'None', no dimensionality reduction is
         performed on the target data for the corresponding connectivity node.
 
-    n_lags : int | None; default None
+    n_lags : int
     -   Number of autocovariance lags to calculate.
-    -   If 'None', the number of lags is the number of frequencies in the
-        cross-spectra minus two.
 
     RETURNS
     -------
@@ -116,50 +118,10 @@ def csd_to_autocov(
     RAISES
     ------
     ValueError
-    -   Raised if "csd" is not three-dimensional.
-    -   Raised if the lengths of the first two dimensions of "csd" are not
-        identical.
-    -   Raised if the lengths of the seed and target indices do not match.
     -   Raised if "n_lags" is greater than (n_freqs - 1) * 2.
     """
-    if len(csd.shape) != 3:
-        raise ValueError(
-            "The cross-spectral density must have three dimensions, but "
-            f"has {len(csd.shape)}."
-        )
-    if csd.shape[0] != csd.shape[1]:
-        raise ValueError(
-            "The cross-spectral density must have the same first two "
-            f"dimensions, but these are {csd.shape[0]} and {csd.shape[1]}, "
-            "respectively."
-        )
-    if len(seeds) != len(targets):
-        raise ValueError(
-            f"The number of seed and target groups ({len(seeds)} and "
-            f"{len(targets)}, respectively) do not match."
-        )
-    if n_seed_components is None:
-        n_seed_components = [None] * len(seeds)
-    else:
-        if len(n_seed_components) != len(seeds):
-            raise ValueError(
-                f"The number of seed groups and seed components ({len(seeds)} "
-                f"and {len(n_seed_components)}, respectively) do not match."
-            )
-    if n_target_components is None:
-        n_target_components = [None] * len(targets)
-    else:
-        if len(n_target_components) != len(targets):
-            raise ValueError(
-                "The number of target groups and target components "
-                f"({len(targets)} and {len(n_target_components)}, "
-                "respectively) do not match."
-            )
-
     n_freqs = csd.shape[2]
     freq_res = n_freqs - 1
-    if n_lags is None:
-        n_lags = freq_res - 1
     if n_lags > freq_res * 2:
         raise ValueError(
             f"The number of lags ({n_lags}) cannot be greater than the "
@@ -218,32 +180,27 @@ def csd_to_autocov(
     return autocov, autocov_indices
 
 
-def autocov_to_full_var(G: NDArray) -> tuple[NDArray, NDArray]:
+def autocov_to_full_var(autocov: NDArray) -> tuple[NDArray, NDArray]:
     """Computes the full vector autoregressive (VAR) model from an
     autocovariance sequence using Whittle's recursion.
 
     PARAMETERS
     ----------
-    G : numpy ndarray
-    -   An autocovariance sequence with dimensions [n_signals x n_signals x
-        n_lags + 1].
+    autocov : numpy ndarray
+    -   An autocovariance sequence with dimensions [signals x signals x (lags +
+        1)].
 
     RETURNS
     -------
-    AF : numpy ndarray
+    var_coeffs : numpy ndarray
     -   The coefficients of the full forward VAR model with dimensions
-        [n_signals x n_signals x n_lags].
+        [signals x signals x lags].
 
-    V : numpy ndarray
-    -   The residuals' covariance matrix with dimensions [n_signals x
-        n_signals].
+    residuals_cov : numpy ndarray
+    -   The residuals' covariance matrix with dimensions [signals x signals].
 
     RAISES
     ------
-    ValueError
-    -   Raised if 'autocov' is not three-dimensional.
-    -   Raised if the lengths of the first two dimensions of 'autocov' are not
-        identical.
     -   Raised if the residuals' covariance matrix is not positive-definite.
 
     NOTES
@@ -255,7 +212,7 @@ def autocov_to_full_var(G: NDArray) -> tuple[NDArray, NDArray]:
     -   If an error is raised over the non-positive-definite nature of the
         residuals' covariance matrix, try using only data that has full rank.
     """
-    AF, V = whittle_lwr_recursion(G=G, enforce_coeffs_good=True)
+    AF, V = whittle_lwr_recursion(autocov=autocov, enforce_coeffs_good=True)
 
     try:
         np.linalg.cholesky(V)
@@ -270,17 +227,17 @@ def autocov_to_full_var(G: NDArray) -> tuple[NDArray, NDArray]:
 
 
 def whittle_lwr_recursion(
-    G: NDArray, enforce_coeffs_good: bool = True
-) -> NDArray:
+    autocov: NDArray, enforce_coeffs_good: bool = True
+) -> tuple[NDArray, NDArray]:
     """Calculates regression coefficients and the residuals' covariance matrix
     from an autocovariance sequence by solving the Yule-Walker equations using
     Whittle's recursive Levinson, Wiggins, Robinson (LWR) algorithm.
 
     PARAMETERS
     ----------
-    G : numpy ndarray
-    -   The autocovariance sequence with dimensions [n_signals x n_signals x
-        (n_lags + 1)].
+    autocov : numpy ndarray
+    -   The autocovariance sequence with dimensions [signals x signals x (lags +
+        1)].
 
     enforce_coeffs_good : bool; default True
     -   Checks that the coefficients of the VAR model are all 'good', i.e. that
@@ -291,17 +248,14 @@ def whittle_lwr_recursion(
     -------
     var_coeffs : numpy ndarray
     -   The coefficients of the full forward VAR model with dimensions
-        [n_signals x n_signals x n_lags].
+        [signals x signals x lags].
 
     residuals_cov : numpy ndarray
-    -   The residuals' covariance matrix with dimensions [n_signals x
-        n_signals].
+    -   The residuals' covariance matrix with dimensions [signals x signals].
 
     RAISES
     ------
     ValueError
-    -   Raised if 'G' does not have three dimensions.
-    -   Raised if the first two dimensions of 'G' do not have the same length.
     -   Raised if 'enforce_coeffs_good' is 'True' and the VAR model coefficients
         are not all neither 'NaN' or 'Inf'.
 
@@ -310,22 +264,10 @@ def whittle_lwr_recursion(
     -   For Whittle's recursion algorithm, see: Whittle P., 1963, Biometrika,
         DOI: 10.1093/biomet/50.1-2.129.
     """
-    G_shape = G.shape
-    if len(G_shape) != 3:
-        raise ValueError(
-            "The autocovariance sequence must have three dimensions, but has "
-            f"{len(G_shape)}."
-        )
-    if G_shape[0] != G_shape[1]:
-        raise ValueError(
-            "The autocovariance sequence must have the same first two "
-            f"dimensions, but these are {G_shape[0]} and "
-            f"{G_shape[1]}, respectively."
-        )
-
+    G = autocov
     ### Initialise recursion
-    n = G_shape[0]  # number of signals
-    q = G_shape[2] - 1  # number of lags
+    n = G.shape[0]  # number of signals
+    q = G.shape[2] - 1  # number of lags
     qn = n * q
 
     G0 = G[:, :, 0]  # covariance
@@ -375,39 +317,36 @@ def whittle_lwr_recursion(
     if enforce_coeffs_good:
         if not np.isfinite(AF).all():
             raise ValueError(
-                "The 'good' (i.e. non-NaN and non-infinite) nature of the "
-                "VAR model coefficients is being enforced, but the "
-                "coefficients are not all finite."
+                "The 'good' (i.e. non-NaN and non-infinite) nature of the VAR "
+                "model coefficients is being enforced, but the coefficients "
+                "are not all finite."
             )
 
     return AF, V
 
 
-def full_var_to_iss(AF: NDArray, V: NDArray):
+def full_var_to_iss(var_coeffs: NDArray) -> tuple[NDArray, NDArray]:
     """Computes innovations-form parameters for a state-space model from a full
     vector autoregressive (VAR) model using Aoki's method.
 
     For a non-moving-average full VAR model, the state-space parameters C (the
-    observation matrix) and V (the innivations covariance matrix) are identical
+    observation matrix) and V (the innovations covariance matrix) are identical
     to AF and V of the VAR model, respectively.
 
     PARAMETERS
     ----------
-    AF : numpy ndarray
-    -   The coefficients of the full VAR model with dimensions [n_signals x
-        n_signals*n_lags].
-
-    V : numpy ndarray
-    -   The residuals' covariance matrix with dimensions [n_signals x
-        n_signals].
+    var_coeffs : numpy ndarray
+    -   The coefficients of the full VAR model with dimensions [signals x
+        (signals * lags)].
 
     RETURNS
     -------
-    A : numpy ndarray
-    -   State transition matrix.
+    state_transition : numpy ndarray
+    -   State transition matrix with dimensions [(signals * lags) x (signals *
+        lags)]
 
-    K : numpy ndarray
-    -   Kalman gain matix.
+    kalman_gain : numpy ndarray
+    -   Kalman gain matix with dimensions [(signals * lags) x (signals)]
 
     NOTES
     -----
@@ -416,30 +355,13 @@ def full_var_to_iss(AF: NDArray, V: NDArray):
     -   Aoki's method for computing innovations-form parameters for a
         state-space model allows for zero-lag coefficients.
     """
-    AF_shape = AF.shape
-    if len(AF_shape) != 2:
-        raise ValueError(
-            "The VAR model coefficients must have two dimensions, but has "
-            f"{len(AF_shape)}."
-        )
-    V_shape = V.shape
-    if len(V_shape) != 2:
-        raise ValueError(
-            "The VAR model's residual's covariance matrix must have two "
-            f"dimensions, but has {len(V_shape)}."
-        )
-    if V_shape[0] != V_shape[1]:
-        raise ValueError(
-            "The VAR model's residual's covariance matrix must have the same "
-            f"first two dimensions, but these are {V_shape[0]} and "
-            f"{V_shape[1]}, respectively."
-        )
-
-    m = AF.shape[0]  # number of signals
-    p = AF.shape[1] // m  # number of autoregressive lags
+    m = var_coeffs.shape[0]  # number of signals
+    p = var_coeffs.shape[1] // m  # number of autoregressive lags
 
     Ip = np.eye(m * p)
-    A = np.vstack((AF, Ip[: (len(Ip) - m), :]))  # state transition matrix
+    A = np.vstack(
+        (var_coeffs, Ip[: (len(Ip) - m), :])
+    )  # state transition matrix
     K = np.vstack(
         (np.eye(m), np.zeros(((m * (p - 1)), m)))
     )  # Kalman gain matrix
@@ -448,41 +370,40 @@ def full_var_to_iss(AF: NDArray, V: NDArray):
 
 
 def iss_to_usgc(
-    A: NDArray,
-    C: NDArray,
-    K: NDArray,
-    V: NDArray,
+    state_transition: NDArray,
+    observation: NDArray,
+    kalman_gain: NDArray,
+    covariance: NDArray,
     freqs: list[Union[int, float]],
-    seeds: list[int],
-    targets: list[int],
+    seeds: ArrayLike,
+    targets: ArrayLike,
 ) -> NDArray:
     """Computes unconditional spectral Granger causality from innovations-form
     state-space model parameters.
 
     PARAMETERS
     ----------
-    A : numpy ndarray
-    -   State transition matrix with dimensions [m x m], where m is the number
-        of signals multiplied by the number of lags.
+    state_transition : numpy ndarray
+    -   State transition matrix with dimensions [(signals * lags) x (signals *
+        lags)].
 
-    C : numpy ndarray
-    -   Observation matrix with dimensions [n x m], where n is the number of
-        signals.
+    observation : numpy ndarray
+    -   Observation matrix with dimensions [signals x (signals * lags)].
 
-    K : numpy ndarray
-    -   Kalman gain matrix with dimensions [m x n].
+    kalman_gain : numpy ndarray
+    -   Kalman gain matrix with dimensions [(signals * lags) x signals].
 
-    V : numpy ndarray
-    -   Innovations covariance matrix with dimensions [n x n].
+    covariance : numpy ndarray
+    -   Innovations covariance matrix with dimensions [signals x signals].
 
-    freqs : list[int | float]
+    freqs : list of int or float
     -   Frequencies of connectivity being analysed.
 
-    seeds : list[int]
-    -   Seed indices. Cannot contain indices also in 'targets'.
+    seeds : array-like of int
+    -   Seed indices. Cannot contain indices also in "targets".
 
-    targets : list[int]
-    -   Target indices. Cannot contain indices also in 'seeds'.
+    targets : array-like of int
+    -   Target indices. Cannot contain indices also in "seeds".
 
     RETURNS
     -------
@@ -495,13 +416,16 @@ def iss_to_usgc(
     -   Reference(s): [1] Barnett, L. & Seth, A.K., 2015, Physical Review, DOI:
         10.1103/PhysRevE.91.040101.
     """
+
     f = np.zeros(len(freqs))
     z = np.exp(
         -1j * np.pi * np.linspace(0, 1, len(freqs))
     )  # points on a unit circle in the complex plane, one for each frequency
-    H = iss_to_tf(A, C, K, z)  # spectral transfer function
-    VSQRT = np.linalg.cholesky(V)
-    PVSQRT = np.linalg.cholesky(partial_covariance(V, seeds, targets))
+    H = iss_to_tf(
+        state_transition, observation, kalman_gain, z
+    )  # spectral transfer function
+    VSQRT = np.linalg.cholesky(covariance)
+    PVSQRT = np.linalg.cholesky(partial_covariance(covariance, seeds, targets))
 
     for freq_i in range(len(freqs)):
         HV = np.matmul(H[:, :, freq_i], VSQRT)
@@ -526,37 +450,34 @@ def iss_to_usgc(
     return f
 
 
-def iss_to_tf(A: NDArray, C: NDArray, K: NDArray, z: NDArray) -> NDArray:
+def iss_to_tf(
+    state_transition: NDArray,
+    observation: NDArray,
+    kalman_gain: NDArray,
+    back_shift: NDArray,
+) -> NDArray:
     """Computes a transfer function (moving-average representation) for
     innovations-form state-space model parameters.
 
     PARAMETERS
     ----------
-    A : numpy array
-    -   State transition matrix with dimensions [m x m], where m is the number
-        of signals multiplied by the number of lags.
+    state_transition : numpy ndarray
+    -   State transition matrix with dimensions [(signals * lags) x (signals *
+        lags)].
 
-    C : numpy array
-    -   Observation matrix with dimensions [n x m], where n is the number of
-        signals.
+    observation : numpy ndarray
+    -   Observation matrix with dimensions [signals x (signals * lags)].
 
-    K : numpy array
-    -   Kalman gain matrix with dimensions [m x n].
+    kalman_gain : numpy ndarray
+    -   Kalman gain matrix with dimensions [(signals * lags) x signals].
 
-    z : numpy array
-    -   The back-shift operator with length p, where p is the number of
-        frequencies.
+    back_shift : numpy ndarray
+    -   The back-shift operator with length equal to the number of frequencies.
 
     RETURNS
     -------
-    H : numpy ndarray
-    -   The transfer function with dimensions [n x n x p]
-
-    RAISES
-    ------
-    ValueError
-    -   If 'A', 'C', or 'K' are not two-dimensional matrices.
-    -   If 'z' is not a vector.
+    transfer_function : numpy ndarray
+    -   The transfer function with dimensions [signals x signals x frequencies].
 
     NOTES
     -----
@@ -566,29 +487,10 @@ def iss_to_tf(A: NDArray, C: NDArray, K: NDArray, z: NDArray) -> NDArray:
         points on a unit circle in the complex plane. z = e^-iw, where -pi < w
         <= pi. See Ref. 17 of [1].
     """
-    if len(A.shape) != 2:
-        raise ValueError(
-            f"'A' must be a two-dimensional matrix, but has {len(A.shape)} "
-            "dimension(s)."
-        )
-    if len(C.shape) != 2:
-        raise ValueError(
-            f"'C' must be a two-dimensional matrix, but has {len(C.shape)} "
-            "dimension(s)."
-        )
-    if len(K.shape) != 2:
-        raise ValueError(
-            f"'K' must be a two-dimensional matrix, but has {len(K.shape)} "
-            "dimension(s)."
-        )
-    if len(z.shape) != 1:
-        raise_err = True
-        if len(z.shape) == 2:
-            raise_err = False
-            if z.shape[1] != 1:
-                raise_err = True
-        if raise_err:
-            raise ValueError("'z' must be a vector, but is a matrix.")
+    A = state_transition
+    C = observation
+    K = kalman_gain
+    z = back_shift
 
     h = len(z)
     n = C.shape[0]
@@ -606,33 +508,33 @@ def iss_to_tf(A: NDArray, C: NDArray, K: NDArray, z: NDArray) -> NDArray:
 
 
 def partial_covariance(
-    V: NDArray, seeds: list[int], targets: list[int]
+    covariance: NDArray, seeds: ArrayLike, targets: ArrayLike
 ) -> NDArray:
     """Computes the partial covariance for use in spectral Granger causality
     (GC) calculations.
 
     PARAMETERS
     ----------
-    V : numpy ndarray
+    covariance : numpy ndarray
     -   A positive-definite, symmetric innovations covariance matrix.
 
-    seeds : list[int]
-    -   Indices of entries in 'V' that are seeds in the GC calculation.
+    seeds : array-like of int
+    -   Indices of entries in "covariance" that are seeds in the GC calculation.
 
-    targets : list[int]
-    -   Indices of entries in 'V' that are targets in the GC calculation.
+    targets : array-like of int
+    -   Indices of entries in "covariance" that are targets in the GC
+        calculation.
 
     RETURNS
     -------
-    numpy ndarray
+    partial_covariance : numpy ndarray
     -   The partial covariance matrix between the targets given the seeds.
 
     RAISES
     ------
     ValueError
-    -   Raised if 'V' is not a two-dimensional matrix.
-    -   Raised if 'V' is not a symmetric, positive-definite matrix.
-    -   Raised if 'seeds' and 'targets' contain common indices.
+    -   Raised if "covariance" is not a symmetric, positive-definite matrix.
+    -   Raised if "seeds" and "targets" contain common indices.
 
     NOTES
     -----
@@ -643,14 +545,12 @@ def partial_covariance(
         V_ij - V_ik * V_kk^-1 * V_kj. In this case, i and j are seeds, and k is
         the targets.
     """
-    if len(V.shape) != 2:
-        raise ValueError(
-            f"'V' must be a two-dimensional matrix, but has {len(V.shape)} "
-            "dimension(s)."
-        )
+    V = covariance
+
     if not check_posdef(V):
         raise ValueError(
-            "'V' must be a positive-definite, symmetric matrix, but it is not."
+            "'covariance' must be a positive-definite, symmetric matrix, but "
+            "it is not."
         )
     common_idcs = set.intersection(set(seeds), set(targets))
     if common_idcs:
@@ -672,7 +572,7 @@ def partial_covariance(
     return V[np.ix_(seeds, seeds)] - W
 
 
-def block_ifft(data: NDArray, n_points: Union[int, None] = None) -> NDArray:
+def block_ifft(data: NDArray, n_points: int) -> NDArray:
     """Performs a 'block' inverse fast Fourier transform on the data, involving
     an n-point inverse Fourier transform.
 
@@ -685,29 +585,13 @@ def block_ifft(data: NDArray, n_points: Union[int, None] = None) -> NDArray:
 
     n_points : int | None; default None
     -   The number of points to use for the inverse Fourier transform.
-    -   If 'None', the numbe of frequencies in the data (i.e. the length of the
-        third dimension) is used.
 
     RETURNS
     -------
-    numpy ndarray
+    transformed_data : numpy ndarray
     -   A three-dimensional matrix of the transformed data.
-
-    RAISES
-    ------
-    ValueError
-    -   Raised if 'data' does not have three dimensions.
     """
     data_shape = data.shape
-    if n_points is None:
-        n_points = data_shape[2]
-
-    if len(data_shape) != 3:
-        raise ValueError(
-            "The cross-spectral density must have three dimensions, but has "
-            f"{len(data_shape)} dimensions."
-        )
-
     two_dim_data = reshape(
         data, (data_shape[0] * data_shape[1], data_shape[2])
     ).T
@@ -726,7 +610,7 @@ def discrete_lyapunov(A: NDArray, Q: NDArray) -> NDArray:
     -   A square matrix with a spectral radius of < 1.
 
     Q : numpy ndarray
-    -   A symmetric, positive-definite matrix.
+    -   A symmetric, positive-definite matrix with the same dimensions as "A".
 
     RETURNS
     -------
@@ -741,16 +625,6 @@ def discrete_lyapunov(A: NDArray, Q: NDArray) -> NDArray:
         of Numerical Analysis, DOI: 10.1093/imanum/2.3.303.
     """
     n = A.shape[0]
-    if n != A.shape[1]:
-        raise ValueError(
-            f"The matrix A is not square (has dimensions {A.shape})."
-        )
-    if A.shape != Q.shape:
-        raise ValueError(
-            f"The dimensions of matrix Q ({Q.shape}) do not match the "
-            f"dimensions of matrix A ({A.shape})."
-        )
-
     T, U = spla.schur(A)
     Q = np.matmul(np.matmul(-U.conj().T, Q), U)
 
@@ -810,7 +684,7 @@ def cross_spectra_svd(
         signals], where n_signals = n_seeds + n_targets.
 
     n_seeds : int
-    -   Number of seed signals. Entries in both dimensions of 'C' from [0 :
+    -   Number of seed signals. Entries in both dimensions of "csd" from [0 :
         n_seeds] are taken as the coherency values for seed signals. Entries
         from [n_seeds : end] are taken as the coherency values for target
         signals.
@@ -877,31 +751,31 @@ def cross_spectra_svd(
     return C_bar, U_bar_aa, U_bar_bb
 
 
-def mim_mic_compute_e(C: NDArray, n_seeds: int) -> NDArray:
-    """Computes 'E' as the imaginary part of the transformed cross-spectra 'D'
-    derived from the original cross-spectra 'C' between the seed and target
+def mim_mic_compute_e(csd: NDArray, n_seeds: int) -> NDArray:
+    """Computes E as the imaginary part of the transformed cross-spectra D
+    derived from the original cross-spectra "csd" between the seed and target
     signals.
 
-    Designed for use with the methods 'max_imaginary_coherence' and
-    'multivariate_interaction_measure'.
+    Designed for use with the functions "max_imaginary_coherence" and
+    "multivariate_interaction_measure".
 
     PARAMETERS
     ----------
-    C : numpy ndarray
+    csd : numpy ndarray
     -   Cross-spectral density between all possible connections of seeds and
         targets, for a single frequency. Has the dimensions [signals x signals].
 
     n_seeds : int
-    -   Number of seed signals. Entries in both dimensions of 'C' from
+    -   Number of seed signals. Entries in both dimensions of "csd" from
         [0 : n_seeds] are taken as the cross-spectral values for seed signals.
         Entries from [n_seeds : end] are taken as the cross-spcetral values for
         target signals.
 
     RETURNS
     -------
-    E : numpy ndarray
-    -   The imaginary part of the transformed cross-spectra 'D' between seed and
-        target signals.
+    transformed_csd : numpy ndarray
+    -   E, the imaginary part of the transformed cross-spectra D between seed
+        and target signals.
 
     NOTES
     -----
@@ -909,18 +783,18 @@ def mim_mic_compute_e(C: NDArray, n_seeds: int) -> NDArray:
         10.1016/j.neuroimage.2011.11.084.
     """
     # Equation 3
-    T = np.zeros(C.shape)
+    T = np.zeros(csd.shape)
     T[:n_seeds, :n_seeds] = spla.fractional_matrix_power(
-        np.real(C[:n_seeds, :n_seeds]), -0.5
+        np.real(csd[:n_seeds, :n_seeds]), -0.5
     )  # real(C_aa)^-1/2
     T[n_seeds:, n_seeds:] = spla.fractional_matrix_power(
-        np.real(C[n_seeds:, n_seeds:]), -0.5
+        np.real(csd[n_seeds:, n_seeds:]), -0.5
     )  # real(C_bb)^-1/2
 
     # Equation 4
-    D = np.matmul(T, np.matmul(C, T))
+    D = np.matmul(T, np.matmul(csd, T))
 
-    # 'E' as the imaginary part of 'D' between seeds and targets
+    # E as the imaginary part of D between seeds and targets
     E = np.imag(D[:n_seeds, n_seeds:])
 
     return E

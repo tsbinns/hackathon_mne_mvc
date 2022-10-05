@@ -1,4 +1,38 @@
-"""Wrapper functions for dealing with MNE objects and functions."""
+"""Wrapper functions for dealing with MNE objects and functions.
+
+FUNCTIONS
+---------
+multivar_spectral_connectivity_epochs
+-   Compute frequency-domain multivariate connectivity measures.
+
+_check_inputs
+-   Checks the values of the input parameters to the
+    "multivar_spectral_connectivity_epochs" function.
+
+_pick_channels
+-   Selects only the channels being used in the connectivity computations from
+    the data.
+
+_update_indices
+-   Updates the connectivity indices in the event that channels are dropped from
+    the data.
+
+_sort_inputs
+-   Sorts the format of the input parameters to the
+    "multivar_spectral_connectivity_epochs" function.
+
+_get_n_epochs
+-   Finds the number of epochs in the data.
+
+_compute_csd
+-   Computes the cross-spectral density of the data.
+
+_compute_connectivity
+-   Computes connectivity results from the cross-spectral density.
+
+_connectivity_to_mne
+-   Stores the connectivity results in an MNE SpectralConnectivity object.
+"""
 
 from copy import deepcopy
 from typing import Union
@@ -34,7 +68,7 @@ def multivar_spectral_connectivity_epochs(
     tmax: Union[float, None] = None,
     fmt_fmin: float = 0.0,
     fmt_fmax: float = np.inf,
-    cwt_freqs: list[float] = None,
+    cwt_freqs: Union[list[float], None] = None,
     fmt_n_fft: Union[int, None] = None,
     cwt_use_fft: bool = True,
     mt_bandwidth: Union[float, None] = None,
@@ -58,11 +92,11 @@ def multivar_spectral_connectivity_epochs(
 
     PARAMETERS
     ----------
-    data : BaseEpochs | array
-    -   Data to compute connectivity on. If an array, must have the dimensions
+    data : BaseEpochs | array-like
+    -   Data to compute connectivity on. If array-like, must have the dimensions
         [epochs x signals x timepoints].
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
@@ -75,7 +109,7 @@ def multivar_spectral_connectivity_epochs(
         'net_gc', 'trgc', 'net_trgc'].
 
     sfreq : float; default 6.283185307179586
-    -   Sampling frequency of the data. Only used if "data" is an array.
+    -   Sampling frequency of the data. Only used if "data" is array-like.
 
     mode : str; default "multitaper"
     -   Cross-spectral estimation method. Can be 'fourier', 'multitaper', or
@@ -251,7 +285,7 @@ def _check_inputs(
     data : Epochs | array
     -   The data on which connectivity is being computed.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
@@ -260,8 +294,11 @@ def _check_inputs(
         'None', then names will be a list of intergers from 0 to the number of
         nodes.
 
-    method : list[str]
+    method : list of str
     -   Connectivity measure(s) to compute.
+
+    mode : str
+    -   Cross-spectral estimation method.
 
     n_seed_components : tuple of int or None | None; default None
     -   Dimensionality reduction parameter specifying the number of seed
@@ -277,7 +314,7 @@ def _check_inputs(
 
     RETURNS
     -------
-    nodes : list[int]
+    nodes : list of int
     -   Index values of nodes of the dataset used to compute connectivity.
 
     RAISES
@@ -290,6 +327,7 @@ def _check_inputs(
     -   Raised if the "mode" is not recognised.
 
     ValueError
+    -   Raised if "data" is array-like and does not have three dimensions.
     -   Raised if the length of "names" and the number of channels in the
         data do not match.
     -   Raised if the length of "indices" is not equal to two.
@@ -301,13 +339,17 @@ def _check_inputs(
         "n_target_components" is greater than the number of channels at the
         corresponding connectivity node for each seed or target, respectively.
     """
-    # Checks data type
     if not isinstance(data, (BaseEpochs, list, tuple, np.ndarray)):
         raise TypeError(
             "The data must be either an MNE Epochs object, or an array."
         )
 
-    # Checks names
+    if not isinstance(data, BaseEpochs) and len(np.shape(data)) != 3:
+        raise ValueError(
+            "The data must consist of three dimensions corresponding to "
+            "epochs, signals, and timepoints, respectively."
+        )
+
     nodes = np.unique(
         [
             idx
@@ -322,7 +364,6 @@ def _check_inputs(
             f"({len(names)}) do not match."
         )
 
-    # Checks methods
     supported_methods = ["mic", "mim", "gc", "net_gc", "trgc", "net_trgc"]
     if isinstance(method, str):
         if method not in supported_methods:
@@ -335,7 +376,6 @@ def _check_inputs(
                 "One or more methods are not supported connectivity methods."
             )
 
-    # Checks modes
     supported_modes = ["fourier", "multitaper", "morlet"]
     if mode not in supported_modes:
         raise NotImplementedError(
@@ -343,7 +383,6 @@ def _check_inputs(
             "cross-spectral density."
         )
 
-    # Checks indices
     if len(indices) != 2:
         raise ValueError(
             "The indices should have a length of two, consisting of index "
@@ -357,7 +396,6 @@ def _check_inputs(
             f"{len(indices[1])}, respectively."
         )
 
-    # Checks seed and target components
     if (
         n_seed_components
         and n_target_components
@@ -416,10 +454,10 @@ def _pick_channels(
     -   The data on which connectivity is being computed. If an array, should
         have the shape [n_epochs, n_signals, n_times].
 
-    nodes : list[int]
+    nodes : list of int
     -   Index values of nodes of the dataset used to compute connectivity.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
@@ -429,7 +467,7 @@ def _pick_channels(
     -   The data with only the channels being used in the connectivity
         computations.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity updated to reflect any changes resulting from dropping
         channels.
@@ -447,6 +485,44 @@ def _pick_channels(
     return data, indices
 
 
+def _update_indices(
+    indices: tuple[tuple[ArrayLike]], picks: NDArray[np.int]
+) -> tuple[tuple[ArrayLike]]:
+    """Updates the connectivity indices in the event that channels are dropped
+    from the data.
+
+    PARAMETERS
+    ----------
+    indices : tuple of tuple of array-like of int
+    -   Two tuples of arrays with indices of connections for which to compute
+        connectivity.
+
+    picks : array-like of int
+    -   Indices of the channels being used in the connectivity computation.
+
+    RETURNS
+    -------
+    updated_indices : tuple of tuple of array-like of int
+    -   Two tuples of arrays with indices of connections for which to compute
+        connectivity.
+    """
+    remapping = {}
+    update_required = False
+    for pick_i, ch_i in enumerate(picks):
+        remapping[ch_i] = pick_i
+        if not update_required and pick_i != ch_i:
+            update_required = True
+
+    updated_indices = deepcopy(indices)
+    if update_required:
+        for seed_i, seed_idcs in enumerate(indices[0]):
+            indices[0][seed_i] = [remapping[idx] for idx in seed_idcs]
+        for target_i, target_idcs in enumerate(indices[1]):
+            indices[1][target_i] = [remapping[idx] for idx in target_idcs]
+
+    return updated_indices
+
+
 def _sort_inputs(
     names: Union[list, None],
     n_nodes: int,
@@ -454,7 +530,7 @@ def _sort_inputs(
     indices: tuple[tuple[ArrayLike]],
     n_seed_components: Union[tuple[Union[int, None]], None] = None,
     n_target_components: Union[tuple[Union[int, None]], None] = None,
-) -> tuple[list, list[str], tuple[Union[int, None]], tuple[Union[int, None]],]:
+) -> tuple[list, list[str], tuple[Union[int, None]], tuple[Union[int, None]]]:
     """Sorts the format of the input parameters to the
     "multivar_spectral_connectivity_epochs" function.
 
@@ -472,7 +548,7 @@ def _sort_inputs(
     -   Connectivity measure(s) to compute. If a str, will be converted to a
         list of str.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
@@ -493,7 +569,7 @@ def _sort_inputs(
     names : list
     -   Names of the nodes used to compute connectivity.
 
-    method : list[str]
+    method : list of str
     -   Connectivity measure(s) to compute.
 
     n_seed_components : tuple of int or None
@@ -507,7 +583,7 @@ def _sort_inputs(
         channels' data for each connectivity node.
     """
     if not names:
-        names = [i for i in range(n_nodes)]
+        names = list(range(n_nodes))
 
     if isinstance(method, str):
         method = [method]
@@ -523,44 +599,6 @@ def _sort_inputs(
         n_seed_components,
         n_target_components,
     )
-
-
-def _update_indices(
-    indices: tuple[tuple[ArrayLike]], picks: NDArray[np.int]
-) -> tuple[tuple[ArrayLike]]:
-    """Updates the connectivity indices in the event that channels are dropped
-    from the data.
-
-    PARAMETERS
-    ----------
-    indices : tuple of tuple of array of int
-    -   Two tuples of arrays with indices of connections for which to compute
-        connectivity.
-
-    picks : array of int
-    -   Indices of the channels being used in the connectivity computation.
-
-    RETURNS
-    -------
-    updated_indices : tuple of tuple of array of int
-    -   Two tuples of arrays with indices of connections for which to compute
-        connectivity.
-    """
-    remapping = {}
-    update_required = False
-    for pick_i, ch_i in enumerate(picks):
-        remapping[ch_i] = pick_i
-        if not update_required and pick_i != ch_i:
-            update_required = True
-
-    updated_indices = deepcopy(indices)
-    if update_required:
-        for seed_i, seed_idcs in enumerate(indices[0]):
-            indices[0][seed_i] = [remapping[idx] for idx in seed_idcs]
-        for target_i, target_idcs in enumerate(indices[1]):
-            indices[1][target_i] = [remapping[idx] for idx in target_idcs]
-
-    return updated_indices
 
 
 def _get_n_epochs(data: Union[BaseEpochs, ArrayLike]) -> int:
@@ -730,63 +768,62 @@ def _compute_csd(
             n_jobs=n_jobs,
             verbose=None,
         )
-    else:
-        if mode == "fourier":
-            return csd_array_fourier(
-                X=data,
-                sfreq=sfreq,
-                t0=t0,
-                fmin=fmt_fmin,
-                fmax=fmt_fmax,
-                tmin=tmin,
-                tmax=tmax,
-                ch_names=None,
-                n_fft=fmt_n_fft,
-                projs=None,
-                n_jobs=n_jobs,
-                verbose=verbose,
-            )
-        if mode == "multitaper":
-            return csd_array_multitaper(
-                X=data,
-                sfreq=sfreq,
-                t0=t0,
-                fmin=fmt_fmin,
-                fmax=fmt_fmax,
-                tmin=tmin,
-                tmax=tmax,
-                ch_names=None,
-                n_fft=fmt_n_fft,
-                bandwidth=mt_bandwidth,
-                adaptive=mt_adaptive,
-                low_bias=mt_low_bias,
-                projs=None,
-                n_jobs=n_jobs,
-                verbose=verbose,
-            )
-        return csd_array_morlet(
+    if mode == "fourier":
+        return csd_array_fourier(
             X=data,
             sfreq=sfreq,
-            frequencies=cwt_freqs,
             t0=t0,
+            fmin=fmt_fmin,
+            fmax=fmt_fmax,
             tmin=tmin,
             tmax=tmax,
             ch_names=None,
-            n_cycles=cwt_n_cycles,
-            use_fft=cwt_use_fft,
-            decim=cwt_decim,
+            n_fft=fmt_n_fft,
             projs=None,
             n_jobs=n_jobs,
             verbose=verbose,
         )
+    if mode == "multitaper":
+        return csd_array_multitaper(
+            X=data,
+            sfreq=sfreq,
+            t0=t0,
+            fmin=fmt_fmin,
+            fmax=fmt_fmax,
+            tmin=tmin,
+            tmax=tmax,
+            ch_names=None,
+            n_fft=fmt_n_fft,
+            bandwidth=mt_bandwidth,
+            adaptive=mt_adaptive,
+            low_bias=mt_low_bias,
+            projs=None,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+    return csd_array_morlet(
+        X=data,
+        sfreq=sfreq,
+        frequencies=cwt_freqs,
+        t0=t0,
+        tmin=tmin,
+        tmax=tmax,
+        ch_names=None,
+        n_cycles=cwt_n_cycles,
+        use_fft=cwt_use_fft,
+        decim=cwt_decim,
+        projs=None,
+        n_jobs=n_jobs,
+        verbose=verbose,
+    )
 
 
 def _compute_connectivity(
     csd: CrossSpectralDensity,
     indices: tuple[tuple[ArrayLike]],
     method: list[str],
-    n_seed_components: Union[tuple[Union[int, None]], None],
-    n_target_components: Union[tuple[Union[int, None]], None],
+    n_seed_components: tuple[Union[int, None]],
+    n_target_components: tuple[Union[int, None]],
     gc_n_lags: int,
     mode: str,
     n_epochs: int,
@@ -800,7 +837,7 @@ def _compute_connectivity(
     csd : CrossSpectralDensity
     -   The cross-spectral density of the data between all channels.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections for which to compute
         connectivity.
 
@@ -908,14 +945,14 @@ def _connectivity_to_mne(
 
     PARAMETERS
     ----------
-    data : list of array
-    -   The connectivity results, with one array in the list for each entry of
+    data : list of array-like
+    -   The connectivity results, with one array-like in the list for each entry of
         "method".
 
-    freqs : array of float
+    freqs : array-like of float
     -   The frequencies in the connectivity results.
 
-    indices : tuple of tuple of array of int
+    indices : tuple of tuple of array-like of int
     -   Two tuples of arrays with indices of connections used to compute
         connectivity.
 

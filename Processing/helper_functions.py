@@ -1,4 +1,11 @@
-"""Minor functions for computing connectivity."""
+"""Minor functions for computing connectivity.
+
+FUNCTIONS
+---------
+multivar_seed_target_indices
+-   Generates indices parameter for seed-based multivariate connectivity
+    analysis.
+"""
 
 from numpy.typing import ArrayLike
 

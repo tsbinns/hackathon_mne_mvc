@@ -1,7 +1,7 @@
-"""Methods for checking the entries of objects.
+"""Functions for checking the entries/values of objects.
 
-METHODS
--------
+FUNCTIONS
+---------
 check_posdef
 -   Checks whether a matrix is positive-definite.
 
@@ -11,15 +11,15 @@ check_svd_params
 """
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike
 
 
-def check_posdef(A: NDArray) -> bool:
+def check_posdef(A: ArrayLike) -> bool:
     """Checks whether a matrix is positive-definite.
 
     PARAMETERS
     ----------
-    A : numpy ndarray
+    A : array-like
     -   The matrix to check the positive-definite nature of.
 
     RETURNS
