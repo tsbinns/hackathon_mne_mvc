@@ -11,7 +11,7 @@ The methods include:
 2. The [MNE](https://mne.tools/stable/index.html) and [MNE-connectivity](https://mne.tools/mne-connectivity/stable/index.html) packages.
 
 ## Use
-Use the _example_pipeline.py_ script to generate the different multivariate results based on the _pipeline_settings.json_ file in the _Settings_ folder.
+Use the _example_pipeline.py_ script to generate the different multivariate results based on some example data (_Data/epochs-epo.fif_) using the specified settings (_Settings/pipeline_settings.json_).
 
 ## References
 [1] Ewald _et al._ (2012). _NeuroImage_. DOI: [10.1016/j.neuroimage.2011.11.084](https://doi.org/10.1016/j.neuroimage.2011.11.084).
