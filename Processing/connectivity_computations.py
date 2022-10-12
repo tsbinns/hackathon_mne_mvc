@@ -15,7 +15,6 @@ autocov_to_gc
 -   Computes frequency-domain Granger causality from an autocovariance sequence.
 """
 
-from statistics import covariance
 from typing import Union
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
