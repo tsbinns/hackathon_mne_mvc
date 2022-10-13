@@ -11,7 +11,7 @@ from mne_connectivity import (
 data = read_epochs("Data/epochs-epo.fif")
 
 ## Load analysis settings
-with open("Settings/pipeline_settings_mne.json", encoding="utf-8") as settings_file:
+with open("Settings/pipeline_settings_mne_mvc.json", encoding="utf-8") as settings_file:
     settings = json.load(settings_file)
 
 ## Compute connectivity

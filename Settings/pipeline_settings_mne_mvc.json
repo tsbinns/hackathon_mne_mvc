@@ -35,7 +35,8 @@
         ]
     ],
     "method": [
-        "imcoh"
+        "mic",
+        "mim"
     ],
     "mode": "multitaper",
     "tmin": null,
