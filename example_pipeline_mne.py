@@ -1,9 +1,10 @@
 """An example pipeline for analysing multivariate connectivity."""
 
 import json
+import numpy as np
 from mne import read_epochs
 from mne_connectivity import (
-    multivar_seed_target_indices,
+    seed_target_indices,
     spectral_connectivity_epochs
 )
 
@@ -15,7 +16,7 @@ with open("Settings/pipeline_settings_mne.json", encoding="utf-8") as settings_f
     settings = json.load(settings_file)
 
 ## Compute connectivity
-indices = multivar_seed_target_indices(settings["seeds"], settings["targets"])
+indices = seed_target_indices(settings["seeds"], settings["targets"])
 results = spectral_connectivity_epochs(
     data=data,
     indices=indices,
@@ -26,11 +27,14 @@ results = spectral_connectivity_epochs(
     tmax=settings["tmax"],
     fmin=settings["fmt_fmin"],
     fmax=settings["fmt_fmax"],
-    cwt_freqs=settings["cwt_freqs"],
+    cwt_freqs=np.asarray(settings["cwt_freqs"]),
     mt_bandwidth=settings["mt_bandwidth"],
     mt_adaptive=settings["mt_adaptive"],
     mt_low_bias=settings["mt_low_bias"],
     cwt_n_cycles=settings["cwt_n_cycles"],
     n_jobs=settings["n_jobs"],
+    block_size=1000,
     verbose=settings["verbose"]
 )
+
+print("Finished!")

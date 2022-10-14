@@ -43,7 +43,17 @@
     "tmax": null,
     "fmt_fmin": 0.0,
     "fmt_fmax": Infinity,
-    "cwt_freqs": null,
+    "cwt_freqs": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+    ],
     "fmt_n_fft": null,
     "cwt_use_fft": true,
     "mt_bandwidth": 5,
@@ -60,6 +70,6 @@
         10,
         5
     ],
-    "n_jobs": 1,
+    "n_jobs": 3,
     "verbose": true
 }
