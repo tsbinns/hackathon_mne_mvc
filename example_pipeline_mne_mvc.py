@@ -39,4 +39,4 @@ results = multivar_spectral_connectivity_epochs(
     verbose=settings["verbose"]
 )
 
-print("FInished!")
+print("Finished!")
