@@ -30,11 +30,7 @@ wrapper_results = multivar_spectral_connectivity_epochs(
 )
 wrapper_time = time.time()-start
 
-from mne_connectivity import (
-    multivar_seed_target_indices,
-    multivar_spectral_connectivity_epochs
-)
-
+from mne_connectivity import multivar_spectral_connectivity_epochs
 ## Compute connectivity
 start=time.time()
 integrated_results = multivar_spectral_connectivity_epochs(
@@ -79,11 +75,11 @@ plt.show()
 if np.allclose(wrapper_results[0].get_data(),integrated_results[0].get_data()):
     print("MIC results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("MIC results are different across implementations.")
 if np.allclose(wrapper_results[1].get_data(),integrated_results[1].get_data()):
     print("MIM results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("MIM results are different across implementations.")
 
 
 print("Finished!")

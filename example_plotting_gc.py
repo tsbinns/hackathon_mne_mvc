@@ -30,11 +30,8 @@ wrapper_results = multivar_spectral_connectivity_epochs(
 )
 wrapper_time = time.time()-start
 
-from mne_connectivity import (
-    multivar_seed_target_indices,
-    multivar_spectral_connectivity_epochs
-)
 
+from mne_connectivity import multivar_spectral_connectivity_epochs
 ## Compute connectivity
 start=time.time()
 integrated_results = multivar_spectral_connectivity_epochs(
@@ -60,26 +57,26 @@ freqs = wrapper_results[0].freqs
 fig, axs = plt.subplots(2, 2)
 fig.suptitle("Cortex-STN connectivity")
 
-axs[0, 0].plot(freqs[:81], np.abs(wrapper_results[0].get_data()[0, :81]), label="MNE Wrapper", linewidth=5)
-axs[0, 0].plot(freqs[:81], np.abs(integrated_results[0].get_data()[0, :81]), label="MNE-integrated", linestyle="--", linewidth=5)
+axs[0, 0].plot(freqs[:81], wrapper_results[0].get_data()[0, :81], label="MNE Wrapper", linewidth=5)
+axs[0, 0].plot(freqs[:81], integrated_results[0].get_data()[0, :81], label="MNE-integrated", linestyle="--", linewidth=5)
 axs[0, 0].set_xlabel("Frequency (Hz)")
 axs[0, 0].set_ylabel("Connectivity (A.U.)")
 axs[0, 0].set_title("Granger Causality")
 
-axs[0, 1].plot(freqs[:81], np.abs(wrapper_results[1].get_data()[0, :81]), label="MNE Wrapper", linewidth=5)
-axs[0, 1].plot(freqs[:81], np.abs(integrated_results[1].get_data()[0, :81]), label="MNE-integrated", linestyle="--", linewidth=5)
+axs[0, 1].plot(freqs[:81], wrapper_results[1].get_data()[0, :81], linewidth=5)
+axs[0, 1].plot(freqs[:81], integrated_results[1].get_data()[0, :81], linestyle="--", linewidth=5)
 axs[0, 1].set_xlabel("Frequency (Hz)")
 axs[0, 1].set_ylabel("Connectivity (A.U.)")
 axs[0, 1].set_title("Net Granger Causality")
 
-axs[1, 0].plot(freqs[:81], np.abs(wrapper_results[2].get_data()[0, :81]), label="MNE Wrapper", linewidth=5)
-axs[1, 0].plot(freqs[:81], np.abs(integrated_results[2].get_data()[0, :81]), label="MNE-integrated", linestyle="--", linewidth=5)
+axs[1, 0].plot(freqs[:81], wrapper_results[2].get_data()[0, :81], linewidth=5)
+axs[1, 0].plot(freqs[:81], integrated_results[2].get_data()[0, :81], linestyle="--", linewidth=5)
 axs[1, 0].set_xlabel("Frequency (Hz)")
 axs[1, 0].set_ylabel("Connectivity (A.U.)")
 axs[1, 0].set_title("Time-Reversed Granger Causality")
 
-axs[1, 1].plot(freqs[:81], np.abs(wrapper_results[3].get_data()[0, :81]), label="MNE Wrapper", linewidth=5)
-axs[1, 1].plot(freqs[:81], np.abs(integrated_results[3].get_data()[0, :81]), label="MNE-integrated", linestyle="--", linewidth=5)
+axs[1, 1].plot(freqs[:81], wrapper_results[3].get_data()[0, :81], linewidth=5)
+axs[1, 1].plot(freqs[:81], integrated_results[3].get_data()[0, :81], linestyle="--", linewidth=5)
 axs[1, 1].set_xlabel("Frequency (Hz)")
 axs[1, 1].set_ylabel("Connectivity (A.U.)")
 axs[1, 1].set_title("Net Time-Reversed Granger Causality")
@@ -91,19 +88,19 @@ plt.show()
 if np.allclose(wrapper_results[0].get_data(), integrated_results[0].get_data()):
     print("GC results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("GC results are different across implementations.")
 if np.allclose(wrapper_results[1].get_data(), integrated_results[1].get_data()):
     print("Net GC results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("Net GC results are different across implementations.")
 if np.allclose(wrapper_results[2].get_data(), integrated_results[2].get_data()):
     print("TRGC results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("TRGC results are different across implementations.")
 if np.allclose(wrapper_results[3].get_data(), integrated_results[3].get_data()):
     print("Net TRGC results are near-identical across implementations.")
 else:
-    print("You fucked up...")
+    raise ValueError("Net TRGC results are different across implementations.")
 
 
 print("Finished!")
