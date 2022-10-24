@@ -37,7 +37,7 @@ _connectivity_to_mne
 from copy import deepcopy
 from typing import Union
 from numpy.typing import ArrayLike, NDArray
-from mne import BaseEpochs
+from mne import BaseEpochs, create_info, EpochsArray
 from mne.time_frequency import (
     CrossSpectralDensity,
     csd_fourier,
@@ -222,7 +222,7 @@ def multivar_spectral_connectivity_epochs(
         indices=indices,
     )
 
-    names, method, n_seed_components, n_target_components = _sort_inputs(
+    names, method, n_seed_components, n_target_components, perform_svd = _sort_inputs(
         names=names,
         n_nodes=len(nodes),
         method=method,
@@ -233,39 +233,116 @@ def multivar_spectral_connectivity_epochs(
 
     n_epochs = _get_n_epochs(data)
 
-    csd = _compute_csd(
-        data=data,
-        sfreq=sfreq,
-        mode=mode,
-        t0=t0,
-        tmin=tmin,
-        tmax=tmax,
-        fmt_fmin=fmt_fmin,
-        fmt_fmax=fmt_fmax,
-        cwt_freqs=cwt_freqs,
-        fmt_n_fft=fmt_n_fft,
-        cwt_use_fft=cwt_use_fft,
-        mt_bandwidth=mt_bandwidth,
-        mt_adaptive=mt_adaptive,
-        mt_low_bias=mt_low_bias,
-        cwt_n_cycles=cwt_n_cycles,
-        cwt_decim=cwt_decim,
-        n_jobs=n_jobs,
-        verbose=verbose,
+    present_gc_methods = [name for name in method if name in ["gc", "net_gc", "trgc", "net_trgc"]]
+    remaining_methods = [name for name in method]
+    if perform_svd and present_gc_methods:
+        seed_target_data, n_seeds = _time_series_svd(
+            data, indices, n_seed_components, n_target_components
+        )
+        n_gc_methods = len(present_gc_methods)
+        if present_gc_methods == method:
+            con = []
+        svd_gc_con = [[] for x in range(n_gc_methods)]
+        for gc_node_data, n_seed_comps in zip(seed_target_data, n_seeds):
+            new_indices = (
+                [np.arange(n_seed_comps).tolist()],
+                [np.arange(n_seed_comps, gc_node_data.get_data().shape[1]).tolist()]
+            )
+            csd = _compute_csd(
+                data=gc_node_data,
+                sfreq=sfreq,
+                mode=mode,
+                t0=t0,
+                tmin=tmin,
+                tmax=tmax,
+                fmt_fmin=fmt_fmin,
+                fmt_fmax=fmt_fmax,
+                cwt_freqs=cwt_freqs,
+                fmt_n_fft=fmt_n_fft,
+                cwt_use_fft=cwt_use_fft,
+                mt_bandwidth=mt_bandwidth,
+                mt_adaptive=mt_adaptive,
+                mt_low_bias=mt_low_bias,
+                cwt_n_cycles=cwt_n_cycles,
+                cwt_decim=cwt_decim,
+                n_jobs=n_jobs,
+                verbose=verbose,
+            )
+            group_con = _compute_connectivity(
+                csd=csd,
+                indices=new_indices,
+                method=method,
+                n_seed_components=n_seed_components,
+                n_target_components=n_target_components,
+                gc_n_lags=gc_n_lags,
+                verbose=verbose,
+            )
+            [svd_gc_con[i].append(group_con[i]) for i in range(n_gc_methods)]
+        svd_gc_con = [np.squeeze(np.array(method_con), 1) for method_con in svd_gc_con]
+        remaining_methods = [
+            name for name in method if name not in present_gc_methods
+        ]
+    
+    if remaining_methods:
+        if remaining_methods == method:
+            svd_gc_con = []
+        csd = _compute_csd(
+            data=data,
+            sfreq=sfreq,
+            mode=mode,
+            t0=t0,
+            tmin=tmin,
+            tmax=tmax,
+            fmt_fmin=fmt_fmin,
+            fmt_fmax=fmt_fmax,
+            cwt_freqs=cwt_freqs,
+            fmt_n_fft=fmt_n_fft,
+            cwt_use_fft=cwt_use_fft,
+            mt_bandwidth=mt_bandwidth,
+            mt_adaptive=mt_adaptive,
+            mt_low_bias=mt_low_bias,
+            cwt_n_cycles=cwt_n_cycles,
+            cwt_decim=cwt_decim,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+        con = _compute_connectivity(
+            csd=csd,
+            indices=indices,
+            method=method,
+            n_seed_components=n_seed_components,
+            n_target_components=n_target_components,
+            gc_n_lags=gc_n_lags,
+            verbose=verbose,
+        )
+
+    if svd_gc_con and con:
+        # combines SVD GC and non-SVD GC results
+        con.extend(svd_gc_con)
+        # orders the results according to the order they were called
+        methods_order = [
+            *present_gc_methods,
+            *remaining_methods
+        ]
+        con = [con[methods_order.index(name)] for name in method]
+    elif svd_gc_con and not con:
+        # stored SVD GC results
+        con = svd_gc_con
+
+    con = _connectivity_to_mne(
+        data=con,
+        freqs=csd.frequencies,
+        indices=indices,
+        names=names,
+        method=method,
+        spec_method=mode,
+        n_epochs_used=n_epochs,
     )
 
-    return _compute_connectivity(
-        csd=csd,
-        indices=indices,
-        method=method,
-        n_seed_components=n_seed_components,
-        n_target_components=n_target_components,
-        gc_n_lags=gc_n_lags,
-        mode=mode,
-        n_epochs=n_epochs,
-        names=names,
-        verbose=verbose,
-    )
+    if len(method) == 1:
+        con = con[0]
+    
+    return con
 
 
 def _check_inputs(
@@ -530,7 +607,7 @@ def _sort_inputs(
     indices: tuple[tuple[ArrayLike]],
     n_seed_components: Union[tuple[Union[int, None]], None] = None,
     n_target_components: Union[tuple[Union[int, None]], None] = None,
-) -> tuple[list, list[str], tuple[Union[int, None]], tuple[Union[int, None]]]:
+) -> tuple[list, list[str], tuple[Union[int, None]], tuple[Union[int, None]], bool]:
     """Sorts the format of the input parameters to the
     "multivar_spectral_connectivity_epochs" function.
 
@@ -581,6 +658,9 @@ def _sort_inputs(
     -   Dimensionality reduction parameter specifying the number of target
         components to extract from the single value decomposition of the target
         channels' data for each connectivity node.
+    
+    perform_svd : bool
+    -   Whether or not single value decomposition will be performed.
     """
     if not names:
         names = list(range(n_nodes))
@@ -588,16 +668,22 @@ def _sort_inputs(
     if isinstance(method, str):
         method = [method]
 
+    perform_svd = False
     if not n_seed_components:
         n_seed_components = tuple([None] * len(indices[0]))
+    else:
+        perform_svd = True
     if not n_target_components:
         n_target_components = tuple([None] * len(indices[1]))
+    else:
+        perform_svd = True
 
     return (
         names,
         method,
         n_seed_components,
         n_target_components,
+        perform_svd
     )
 
 
@@ -619,6 +705,46 @@ def _get_n_epochs(data: Union[BaseEpochs, ArrayLike]) -> int:
         return data.get_data(picks=[0]).shape[0]
     else:
         return data.shape[0]
+
+
+def _time_series_svd(data, indices, n_seed_components, n_target_components):
+    """Performs a single value decomposition on the timeseries data for each set
+    of seed-target pairs."""
+    if isinstance(data, BaseEpochs):
+        epochs = data.get_data(picks=data.ch_names)
+    else:
+        epochs = data
+
+    seed_target_data = []
+    n_seeds = []
+    for seeds, targets, n_seed_comps, n_target_comps in \
+        zip(indices[0], indices[1], n_seed_components, n_target_components):
+
+        if n_seed_comps: # SVD seed data
+            v_seeds = (
+                np.linalg.svd(epochs[:, seeds, :], full_matrices=False)[2]
+                [:, :n_seed_comps, :]
+            )
+        else: # use unaltered seed data
+            v_seeds = epochs[:, seeds, :]
+        n_seeds.append(len(seeds))
+
+        if n_target_comps: # SVD target data
+            v_targets = (
+                np.linalg.svd(epochs[:, targets, :], full_matrices=False)[2]
+                [:, :n_target_comps, :]
+            )
+        else: # use unaltered target data
+            v_targets = epochs[:, targets, :]
+
+        seed_target_data.append(np.append(v_seeds, v_targets, axis=1))
+    
+    if isinstance(data, BaseEpochs):
+        for group_i, group_data in enumerate(seed_target_data):
+            info = create_info(group_data.shape[1], data.info["sfreq"])
+            seed_target_data[group_i] = EpochsArray(group_data, info)
+
+    return seed_target_data, n_seeds
 
 
 def _compute_csd(
@@ -733,7 +859,7 @@ def _compute_csd(
                 fmax=fmt_fmax,
                 tmin=tmin,
                 tmax=tmax,
-                picks=None,
+                picks=data.ch_names,
                 n_fft=fmt_n_fft,
                 projs=None,
                 n_jobs=n_jobs,
@@ -746,7 +872,7 @@ def _compute_csd(
                 fmax=fmt_fmax,
                 tmin=tmin,
                 tmax=tmax,
-                picks=None,
+                picks=data.ch_names,
                 n_fft=fmt_n_fft,
                 bandwidth=mt_bandwidth,
                 adaptive=mt_adaptive,
@@ -760,7 +886,7 @@ def _compute_csd(
             frequencies=cwt_freqs,
             tmin=tmin,
             tmax=tmax,
-            picks=None,
+            picks=data.ch_names,
             n_cycles=cwt_n_cycles,
             use_fft=cwt_use_fft,
             decim=cwt_decim,
@@ -825,11 +951,8 @@ def _compute_connectivity(
     n_seed_components: tuple[Union[int, None]],
     n_target_components: tuple[Union[int, None]],
     gc_n_lags: int,
-    mode: str,
-    n_epochs: int,
-    names: list,
     verbose: bool,
-) -> Union[SpectralConnectivity, list[SpectralConnectivity]]:
+) -> list[NDArray]:
     """Computes connectivity results from the cross-spectral density.
 
     PARAMETERS
@@ -859,25 +982,14 @@ def _compute_connectivity(
         from the cross-spectral density. Only used if the method is 'gc',
         'net_gc', 'trgc', or 'net_trgc'.
 
-    mode : str
-    -   The name of the mode used to compute the cross-spectral density.
-
-    n_epochs : int
-    -   The number of epochs used to compute the cross-spectral density.
-
-    names : list
-    -   The names of the nodes of the dataset used to compute connectivity.
-
     verbose: bool
     -   Whether or not to print information about the connectivity computations.
 
     RETURNS
     -------
-    connectivity : SpectralConnectivity | list[SpectralConnectivity]
-    -   The connectivity results as a single SpectralConnectivity object (if
-        only one method is called) or a list of SpectralConnectivity objects (if
-        multiple methods are called, where each object is the results for the
-        corresponding entry in "method").
+    connectivity : list[NDArray]
+    -   The connectivity results as a list of numpy ndarrays, where each object
+        is the results for the corresponding entry in "method".
     """
     connectivity = []
     csd_matrix = np.transpose(
@@ -910,24 +1022,9 @@ def _compute_connectivity(
                 method=con_method,
                 seeds=indices[0],
                 targets=indices[1],
-                n_seed_components=n_seed_components,
-                n_target_components=n_target_components,
                 n_lags=gc_n_lags,
             )
         connectivity.append(con)
-
-    connectivity = _connectivity_to_mne(
-        data=connectivity,
-        freqs=csd.frequencies,
-        indices=indices,
-        names=names,
-        method=method,
-        spec_method=mode,
-        n_epochs_used=n_epochs,
-    )
-
-    if len(method) == 1:
-        connectivity = connectivity[0]
 
     return connectivity
 

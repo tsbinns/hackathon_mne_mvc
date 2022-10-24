@@ -213,8 +213,6 @@ def granger_causality(
     method: str,
     seeds: tuple[ArrayLike],
     targets: tuple[ArrayLike],
-    n_seed_components: tuple[Union[int, None]],
-    n_target_components: tuple[Union[int, None]],
     n_lags: int,
 ) -> NDArray:
     """Computes frequency-domain Granger causality (GC) between two sets of
@@ -249,24 +247,6 @@ def granger_causality(
         treated as a group of targets.
     -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : tuple of int or None
-    -   The number of components that should be taken from the seed data after
-        dimensionality reduction using singular value decomposition (SVD), with
-        one value for each of the connectivity nodes.
-    -   If 'None', no dimensionality reduction is performed on the seed data for
-        any of the connectivity nodes.
-    -   If some values in the tuple are 'None', no dimensionality reduction is
-        performed on the seed data for the corresponding connectivity node.
-
-    n_target_components : tuple of int or None
-    -   The number of components that should be taken from the target data after
-        dimensionality reduction using singular value decomposition (SVD), with
-        one value for each of the connectivity nodes.
-    -   If 'None', no dimensionality reduction is performed on the target data
-        for any of the connectivity nodes.
-    -   If some values in the tuple are 'None', no dimensionality reduction is
-        performed on the target data for the corresponding connectivity node.
-
     n_lags : int
     -   Number of lags to use when computing the autocovariance sequence from
         the cross-spectra.
@@ -282,16 +262,14 @@ def granger_causality(
     -   Net TRGC is the recommended method for maximum robustness.
     -   Each group of seeds and targets cannot contain the same indices.
     """
-    autocov, autocov_indices = csd_to_autocov(
+    autocov = csd_to_autocov(
         csd=csd,
         seeds=seeds,
         targets=targets,
-        n_seed_components=n_seed_components,
-        n_target_components=n_target_components,
         n_lags=n_lags,
     )
     connectivity = autocov_to_gc(
-        autocov=autocov, freqs=freqs, method=method, indices=autocov_indices
+        autocov=autocov, freqs=freqs, method=method, indices=(seeds, targets)
     )
 
     return connectivity

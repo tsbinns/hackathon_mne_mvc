@@ -60,10 +60,8 @@ def csd_to_autocov(
     csd: NDArray,
     seeds: tuple[ArrayLike],
     targets: tuple[ArrayLike],
-    n_seed_components: tuple[Union[int, None]],
-    n_target_components: tuple[Union[int, None]],
     n_lags: int,
-) -> tuple[list[NDArray], tuple[list[list[int]]]]:
+) -> list[NDArray]:
     """Computes the autocovariance sequence from the cross-spectral density.
 
     PARAMETERS
@@ -85,24 +83,6 @@ def csd_to_autocov(
         treated as a group of targets.
     -   The number of sublists must match the number of sublists in "seeds".
 
-    n_seed_components : tuple of int or None
-    -   The number of components that should be taken from the seed data after
-        dimensionality reduction using singular value decomposition (SVD), with
-        one value for each of the connectivity nodes.
-    -   If 'None', no dimensionality reduction is performed on the seed data for
-        any of the connectivity nodes.
-    -   If some values in the tuple are 'None', no dimensionality reduction is
-        performed on the seed data for the corresponding connectivity node.
-
-    n_target_components : tuple of int or None
-    -   The number of components that should be taken from the target data after
-        dimensionality reduction using singular value decomposition (SVD), with
-        one value for each of the connectivity nodes.
-    -   If 'None', no dimensionality reduction is performed on the target data
-        for any of the connectivity nodes.
-    -   If some values in the tuple are 'None', no dimensionality reduction is
-        performed on the target data for the corresponding connectivity node.
-
     n_lags : int
     -   Number of autocovariance lags to calculate.
 
@@ -112,9 +92,6 @@ def csd_to_autocov(
     -   The computed autocovariance sequence for each node as arrays with
         dimensions [signals x signals x (lags + 1)]
 
-    autocov_indices : tuple of list of list of int
-    -   Indices of the seeds and targets in each node of "autocov".
-
     RAISES
     ------
     ValueError
@@ -122,34 +99,17 @@ def csd_to_autocov(
     """
     n_freqs = csd.shape[2]
     freq_res = n_freqs - 1
-    if n_lags > freq_res * 2:
+    if n_lags >= freq_res * 2:
         raise ValueError(
-            f"The number of lags ({n_lags}) cannot be greater than the "
-            "frequency resolution of the cross-spectral density "
-            f"({freq_res})."
+            f"The number of lags ({n_lags}) must be less than the frequency "
+            f"resolution of the cross-spectral density ({freq_res})."
         )
 
     autocov = []
-    autocov_indices = [[], []]
     node_i = 0
     for node_seeds, node_targets in zip(seeds, targets):
         node_idcs = [*node_seeds, *node_targets]
         node_csd = csd[np.ix_(node_idcs, node_idcs, np.arange(n_freqs))]
-
-        node_csd_bar = []
-        for freq_i in range(n_freqs):
-            C_bar, U_bar_aa, _ = cross_spectra_svd(
-                csd=node_csd[:, :, freq_i],
-                n_seeds=len(node_seeds),
-                n_seed_components=n_seed_components[node_i],
-                n_target_components=n_target_components[node_i],
-            )
-            node_csd_bar.append(C_bar)
-        node_csd = np.transpose(np.asarray(node_csd_bar), (1, 2, 0))
-        autocov_indices[0].append(np.arange(U_bar_aa.shape[1]).tolist())
-        autocov_indices[1].append(
-            np.arange(start=U_bar_aa.shape[1], stop=node_csd.shape[0]).tolist()
-        )
 
         circular_shifted_csd = np.concatenate(
             [np.flip(np.conj(node_csd[:, :, 1:]), axis=2), node_csd[:, :, :-1]],
@@ -177,7 +137,7 @@ def csd_to_autocov(
         )
         node_i += 1
 
-    return autocov, autocov_indices
+    return autocov
 
 
 def autocov_to_full_var(autocov: NDArray) -> tuple[NDArray, NDArray]:
