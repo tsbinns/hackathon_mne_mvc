@@ -376,7 +376,7 @@ def _check_inputs(
                 "One or more methods are not supported connectivity methods."
             )
 
-    supported_modes = ["fourier", "multitaper", "morlet"]
+    supported_modes = ["fourier", "multitaper", "cwt_morlet"]
     if mode not in supported_modes:
         raise NotImplementedError(
             "The mode is not a supported manner for computing the "
