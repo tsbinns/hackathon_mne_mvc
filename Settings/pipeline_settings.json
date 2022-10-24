@@ -5,23 +5,16 @@
             1,
             2,
             3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9
-        ],
-        [
-            0,
-            1,
-            2,
-            3,
             4
         ]
     ],
     "targets": [
         [
+            5,
+            6,
+            7,
+            8,
+            9,
             10,
             11,
             12,
@@ -36,15 +29,18 @@
     ],
     "method": [
         "mic",
-        "mim",
-        "net_trgc"
+        "mim"
     ],
     "mode": "multitaper",
     "tmin": null,
     "tmax": null,
     "fmt_fmin": 0.0,
     "fmt_fmax": Infinity,
-    "cwt_freqs": null,
+    "cwt_freqs": [
+        1,
+        2,
+        3
+    ],
     "fmt_n_fft": null,
     "cwt_use_fft": true,
     "mt_bandwidth": 5,
@@ -54,12 +50,10 @@
     "cwt_decim": 1,
     "gc_n_lags": 20,
     "n_seed_components": [
-        10,
-        3
+        5
     ],
     "n_target_components": [
-        10,
-        5
+        7
     ],
     "n_jobs": 3,
     "verbose": true
