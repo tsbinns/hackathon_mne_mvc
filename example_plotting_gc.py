@@ -1,10 +1,6 @@
 from matplotlib import pyplot as plt
-from scipy.io import loadmat
 import numpy as np
-
-import json
 from mne import read_epochs
-from Processing.helper_functions import multivar_seed_target_indices
 from Processing.mne_wrapper_functions import (
     multivar_spectral_connectivity_epochs,
 )
