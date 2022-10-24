@@ -81,15 +81,16 @@ freqs = wrapper_results[0].freqs
 
 # Plot results
 fig, axs = plt.subplots(1, 2)
+fig.suptitle("Cortex-STN connectivity")
 
-axs[0].plot(freqs[:81], np.abs(wrapper_results[0].get_data()[0,:81]), label="MNE Wrapper")
-axs[0].plot(freqs[:81], np.abs(integrated_results[0].get_data()[0, 1:82]), label="MNE-integrated")
+axs[0].plot(freqs[:81], np.abs(wrapper_results[0].get_data()[0, :81]), label="MNE Wrapper", linewidth=5)
+axs[0].plot(freqs[:81], np.abs(integrated_results[0].get_data()[0, :81]), label="MNE-integrated", linestyle="--", linewidth=5)
 axs[0].set_xlabel("Frequency (Hz)")
 axs[0].set_ylabel("Abs(connectivity) (A.U.)")
 axs[0].set_title("Maximised Imaginary Coherence")
 
-axs[1].plot(freqs[:81], np.abs(wrapper_results[1].get_data()[0,:81]))
-axs[1].plot(freqs[:81], np.abs(integrated_results[1].get_data()[0, 1:82]))
+axs[1].plot(freqs[:81], np.abs(wrapper_results[1].get_data()[0, :81]), linewidth=5)
+axs[1].plot(freqs[:81], np.abs(integrated_results[1].get_data()[0, :81]), linestyle="--", linewidth=5)
 axs[1].set_xlabel("Frequency (Hz)")
 axs[1].set_ylabel("Abs(connectivity) (A.U.)")
 axs[1].set_title("Multivariate Interaction Measure")
@@ -98,10 +99,14 @@ fig.legend()
 plt.show()
 
 # Check similarity of results
-if np.allclose(np.abs(wrapper_results[0].get_data()[0,:]),np.abs(integrated_results[0].get_data()[0, 1:])):
+if np.allclose(wrapper_results[0].get_data()[0,:],integrated_results[0].get_data()[0, :]):
     print("MIC results are near-identical across implementations.")
-if np.allclose(np.abs(wrapper_results[1].get_data()[0,:]),np.abs(integrated_results[1].get_data()[0, 1:])):
+else:
+    print("You fucked up...")
+if np.allclose(wrapper_results[1].get_data()[0,:],integrated_results[1].get_data()[0, :]):
     print("MIM results are near-identical across implementations.")
+else:
+    print("You fucked up...")
 
 
 print("Finished!")
