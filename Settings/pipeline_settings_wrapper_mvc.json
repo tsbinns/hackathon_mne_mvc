@@ -29,25 +29,25 @@
     ],
     "method": [
         "mic",
-        "mim"
+        "mim",
+        "gc",
+        "net_gc",
+        "trgc",
+        "net_trgc"
     ],
     "mode": "multitaper",
     "tmin": null,
     "tmax": null,
     "fmt_fmin": 0.0,
     "fmt_fmax": Infinity,
-    "cwt_freqs": [
-        1,
-        2,
-        3
-    ],
+    "cwt_freqs": null,
     "fmt_n_fft": null,
     "cwt_use_fft": true,
     "mt_bandwidth": 5,
     "mt_adaptive": true,
     "mt_low_bias": true,
     "cwt_n_cycles": 7.0,
-    "cwt_decim": 1,
+    "cwt_decim": null,
     "gc_n_lags": 20,
     "n_seed_components": [
         5

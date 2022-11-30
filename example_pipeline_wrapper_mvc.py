@@ -1,4 +1,4 @@
-"""An example pipeline for analysing multivariate connectivity."""
+"""Pipeline for analysing multivariate connectivity with a wrapper to MNE."""
 
 import json
 from mne import read_epochs
@@ -11,7 +11,7 @@ from Processing.mne_wrapper_functions import (
 data = read_epochs("Data/epochs-epo.fif")
 
 ## Load analysis settings
-with open("Settings/pipeline_settings.json", encoding="utf-8") as settings_file:
+with open("Settings/pipeline_settings_wrapper_mvc.json", encoding="utf-8") as settings_file:
     settings = json.load(settings_file)
 
 ## Compute connectivity
