@@ -3,9 +3,8 @@
 from matplotlib import pyplot as plt
 import numpy as np
 from mne import read_epochs
-from Processing.mne_wrapper_functions import (
-    multivar_spectral_connectivity_epochs,
-)
+from Processing.mne_wrapper_functions import multivar_spectral_connectivity_epochs as wrapper_mvc
+from mne_connectivity import multivar_spectral_connectivity_epochs as integrated_mvc
 
 ## Load data stored in an MNE Epochs object
 data = read_epochs("Data/real_data-epo.fif")
@@ -15,7 +14,7 @@ methods = ["gc", "net_gc", "trgc", "net_trgc"]
 indices = tuple([[[0, 1, 2, 3, 4]], [[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]]])
 import time
 start = time.time()
-wrapper_results = multivar_spectral_connectivity_epochs(
+wrapper_results = wrapper_mvc(
     data=data,
     indices=indices,
     names=data.info["ch_names"],
@@ -34,10 +33,9 @@ wrapper_results = multivar_spectral_connectivity_epochs(
 wrapper_time = time.time()-start
 
 
-from mne_connectivity import multivar_spectral_connectivity_epochs
 ## Compute connectivity
 start=time.time()
-integrated_results = multivar_spectral_connectivity_epochs(
+integrated_results = integrated_mvc(
     data=data,
     indices=indices,
     names=data.info["ch_names"],
@@ -93,7 +91,7 @@ for method_i, method in enumerate(methods):
     if np.allclose(
         wrapper_results[method_i].get_data(),
         integrated_results[method_i].get_data(),
-        atol=1e-5
+        atol=1e-7
     ):
         print(f"{method} results are near-identical across implementations.")
     else:
