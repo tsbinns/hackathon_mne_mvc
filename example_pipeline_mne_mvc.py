@@ -4,8 +4,8 @@ import json
 import numpy as np
 from mne import read_epochs
 from mne_connectivity import (
-    multivar_seed_target_indices,
-    multivar_spectral_connectivity_epochs
+    multivariate_seed_target_indices,
+    multivariate_spectral_connectivity_epochs,
 )
 
 ## Load data stored in an MNE Epochs object
@@ -16,8 +16,8 @@ with open("Settings/pipeline_settings_mne_mvc.json", encoding="utf-8") as settin
     settings = json.load(settings_file)
 
 ## Compute connectivity
-indices = multivar_seed_target_indices(settings["seeds"], settings["targets"])
-results = multivar_spectral_connectivity_epochs(
+indices = multivariate_seed_target_indices(settings["seeds"], settings["targets"])
+results = multivariate_spectral_connectivity_epochs(
     data=data,
     indices=indices,
     names=data.info["ch_names"],
