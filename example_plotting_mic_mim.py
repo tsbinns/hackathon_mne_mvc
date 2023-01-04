@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from mne import read_epochs
 from Processing.mne_wrapper_functions import multivar_spectral_connectivity_epochs as wrapper_mvc
-from mne_connectivity import multivar_spectral_connectivity_epochs as integrated_mvc
+from mne_connectivity import multivariate_spectral_connectivity_epochs as integrated_mvc
 
 ## Load data stored in an MNE Epochs object
 data = read_epochs("Data/epochs-epo.fif")
